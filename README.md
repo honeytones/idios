@@ -12,7 +12,6 @@ Idios connects [Hypertensor](https://hypertensor.org) AI inference with [Beam Mi
 
 Hypertensor's settlement layer is public. Anyone can see which wallets paid for AI work, which nodes were rewarded, and how much changed hands. For enterprise clients and anyone running inference on sensitive data, that's a dealbreaker regardless of how capable the AI layer is.
 
-Hayotensor has stated publicly: *"Right now subnet validators can see inputs but privatising is a feature we want to implement. Either the community will get to this first, another team will open source this, or we will."*
 
 Idios is the community answer — specifically for settlement and payment privacy, which is achievable today without waiting for inference privacy to mature.
 
