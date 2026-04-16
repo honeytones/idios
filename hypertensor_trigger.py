@@ -183,37 +183,63 @@ def wait_for_epoch_close(ht, subnet_id: int, target_epoch: int) -> bool:
 def get_epoch_result(ht, subnet_id: int, epoch: int) -> Optional[EpochResult]:
     """
     Query the Network.RewardResult event for a closed epoch.
-    Uses get_reward_result_event() from chain_functions.py — exact same call,
-    returns (subnet_id, attestation_percentage).
 
-    attestation_percentage is a u128 scaled value (1e18 = 100%).
-    We convert to 0-100 integer for comparison.
+    RewardResult fires at the first block of the NEXT epoch:
+      block = epoch_length * (epoch + 1)
+    e.g. epoch 149 result is at block 1500, epoch 150 at block 1510.
+
+    attestation_percentage is scaled by 1e18 — divide by 1e18 * 100 for 0-100.
     """
     try:
-        result = ht.get_reward_result_event(subnet_id, epoch)
+        from substrateinterface import SubstrateInterface
+        si = SubstrateInterface(url=HYPERTENSOR_RPC_URL)
+
+        epoch_length = int(str(ht.get_epoch_length()))
+        # RewardResult fires at start of next epoch
+        block_number = epoch_length * (epoch + 1)
+
+        log.debug("Querying RewardResult at block %d (epoch %d)", block_number, epoch)
+
+        block_hash = si.get_block_hash(block_number)
+        if block_hash is None:
+            log.debug("Block %d not found", block_number)
+            return None
+
+        events = si.get_events(block_hash)
+        for event in events:
+            ev = event.value.get("event", {})
+            if ev.get("module_id") == "Network" and ev.get("event_id") == "RewardResult":
+                attrs = ev.get("attributes", [])
+                # attrs is [subnet_id, attestation_percentage]
+                if isinstance(attrs, list) and len(attrs) >= 2:
+                    ev_subnet_id, attestation_percentage = attrs[0], attrs[1]
+                elif isinstance(attrs, dict):
+                    ev_subnet_id = attrs.get("subnet_id", attrs.get(0))
+                    attestation_percentage = attrs.get("attestation_percentage", attrs.get(1))
+                else:
+                    continue
+
+                if int(str(ev_subnet_id)) != subnet_id:
+                    continue
+
+                pct_raw = int(str(attestation_percentage))
+                # Scale: 1e18 = 100%
+                attestation_pct = int(pct_raw / 1e18 * 100)
+                passed = attestation_pct >= ATTESTATION_THRESHOLD
+
+                log.info(
+                    "RewardResult — subnet=%d epoch=%d attestation=%d%% → %s",
+                    subnet_id, epoch, attestation_pct,
+                    "PASSED ✅" if passed else "FAILED ❌"
+                )
+                return EpochResult(epoch=epoch, passed=passed, attestation_pct=attestation_pct)
+
+        log.debug("No RewardResult for subnet %d at block %d", subnet_id, block_number)
+        return None
+
     except Exception as e:
-        log.warning("get_reward_result_event failed for epoch %d: %s", epoch, e)
+        log.warning("get_epoch_result failed for epoch %d: %s", epoch, e)
         return None
-
-    if result is None:
-        log.debug("No RewardResult event found for subnet %d epoch %d", subnet_id, epoch)
-        return None
-
-    _subnet_id, attestation_percentage = result
-
-    # attestation_percentage is scaled by 1e18 in the Hypertensor runtime
-    # Convert to 0-100 integer
-    pct_raw = int(str(attestation_percentage))
-    attestation_pct = int(pct_raw / 1e18 * 100)
-
-    passed = attestation_pct >= ATTESTATION_THRESHOLD
-
-    log.info(
-        "RewardResult — subnet=%d epoch=%d attestation=%d%% → %s",
-        subnet_id, epoch, attestation_pct,
-        "PASSED ✅" if passed else "FAILED ❌"
-    )
-    return EpochResult(epoch=epoch, passed=passed, attestation_pct=attestation_pct)
 
 
 def get_epoch_result_from_consensus_data(ht, subnet_id: int, epoch: int) -> Optional[EpochResult]:
