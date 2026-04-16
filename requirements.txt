@@ -1,0 +1,12 @@
+requests
+substrate-interface
+tenacity
+websocket-client
+torch
+numpy
+uvloop
+varint
+msgpack
+grpcio
+grpcio-tools
+protobuf
