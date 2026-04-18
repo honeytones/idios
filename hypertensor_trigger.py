@@ -392,7 +392,7 @@ TERMINAL     = {2, 3, 4}
 # Main
 # ---------------------------------------------------------------------------
 
-def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = None):
+def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = None, mock_settle: bool = False):
     log.info(
         "Idios trigger starting — job=%d  subnet=%d  threshold=%d%%",
         job.job_id, job.subnet_id, ATTESTATION_THRESHOLD
@@ -408,6 +408,17 @@ def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = Non
         log.info("Beam job %d status: %s", job.job_id, STATUS_NAMES.get(status, status))
     except Exception as e:
         log.warning("Could not read Beam job state (wallet-api running?): %s", e)
+
+    # ── Mock settle (bypass Hypertensor) ─────────────────────────────────
+    if mock_settle:
+        log.info("Mock settle enabled — bypassing Hypertensor, firing settle directly")
+        try:
+            txid = beam_settle(job, 100)
+            log.info("✅ Settled (mock) — job=%d  txid=%s", job.job_id, txid)
+        except Exception as e:
+            log.error("Settle failed: %s", e)
+            sys.exit(1)
+        return
 
     # ── Connect to Hypertensor ────────────────────────────────────────────
     ht = _load_hypertensor(mnemonic)
@@ -512,6 +523,8 @@ Env vars (alternative to CLI flags):
                    help="Test Beam connection only — reads job state and exits")
     p.add_argument("--ht_test",     action="store_true",
                    help="Test Hypertensor connection only — reads epoch and exits")
+    p.add_argument("--mock_settle",  action="store_true",
+                   help="Mock a passing attestation (100%%) — bypasses Hypertensor, fires settle directly")
     args = p.parse_args()
 
     job = JobParams(
@@ -558,7 +571,7 @@ Env vars (alternative to CLI flags):
         log.error("--mnemonic required (or set MIDDLEWARE_MNEMONIC env var)")
         sys.exit(1)
 
-    run_trigger(job, mnemonic=args.mnemonic, target_epoch=args.epoch)
+    run_trigger(job, mnemonic=args.mnemonic, target_epoch=args.epoch, mock_settle=args.mock_settle)
 
 
 if __name__ == "__main__":
