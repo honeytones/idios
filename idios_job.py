@@ -152,22 +152,35 @@ def beam_create_job(job_id: int, subnet_id: int, node_pk: str, result_hash: str,
     return txid
 
 def beam_view_job(job_id: int) -> dict:
-    args = f"role=user,action=view_job,cid={IDIOS_CID},job_id={job_id}"
-    payload = {
-        "jsonrpc": "2.0", "id": 1,
-        "method": "invoke_contract",
-        "params": {"contract_file": IDIOS_WASM_PATH, "args": args},
-    }
-    r = requests.post(BEAM_WALLET_API, json=payload, timeout=10)
-    r.raise_for_status()
-    result = r.json().get("result", {})
-    import json as _json
-    output = result.get("output", "{}")
+    """View job state using beam-wallet CLI — wallet-api invoke_contract cannot read contract vars."""
+    import subprocess, json as _json
+    beam_cli = os.getenv("BEAM_CLI_PATH", "/home/tones/beam-cli2/beam-wallet")
+    args_str = (
+        f"role=user,action=view_job,"
+        f"cid={IDIOS_CID},"
+        f"job_id={job_id}"
+    )
+    cmd = [
+        beam_cli, "shader",
+        "--config_file=/home/tones/beam-cli2/beam-wallet.cfg",
+        "--wallet_path=/home/tones/beam-cli2/wallet.db",
+        f"--shader_app_file={IDIOS_WASM_PATH}",
+        f"--shader_args={args_str}",
+        f"--node_addr={BEAM_NODE_ADDR}",
+    ]
     try:
-        parsed = _json.loads("{" + output.split("{", 1)[1].rsplit("}", 1)[0] + "}")
-        return parsed.get("job", parsed)
-    except Exception:
-        return result
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        output = result.stdout + result.stderr
+        for line in output.splitlines():
+            if "Shader output:" in line:
+                data_str = line.split("Shader output:", 1)[1].strip()
+                if data_str.startswith('"'):
+                    data_str = "{" + data_str + "}"
+                parsed = _json.loads(data_str)
+                return parsed.get("job", {})
+    except Exception as e:
+        log.warning("beam_view_job CLI failed: %s", e)
+    return {}
 
 STATUS_NAMES = {0: "Open", 1: "Active", 2: "Settled", 3: "Slashed", 4: "Refunded"}
 TERMINAL = {2, 3, 4}
