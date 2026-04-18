@@ -152,7 +152,7 @@ PYTHONPATH=~/subnet-template:~/subnet-template/subnet/proto python3 ~/idios-repo
   --job_id 9 --subnet_id 1 \
   --result_hash c0ea7f0026b502e78fb5cdf98b97e69df2e482461c2345077793d8bf493ce088 \
   --payment 10000000 --collateral 5000000 \
-  --mnemonic "bottom drive obey lake curtain smoke basket hold race lonely fit walk" \
+  --mnemonic "your twelve word middleware mnemonic here" \
   --epoch 420
 ```
 
