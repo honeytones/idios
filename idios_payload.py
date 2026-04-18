@@ -227,7 +227,7 @@ def ipfs_add(api_url: str, data: bytes) -> str:
     payload = {
         "jsonrpc": "2.0", "id": 1,
         "method": "ipfs_add",
-        "params": {"data": base64.b64encode(data).decode()}
+        "params": {"data": list(data)}
     }
     try:
         r = requests.post(api_url, json=payload, timeout=30)
@@ -271,6 +271,7 @@ def ipfs_get(api_url: str, cid: str) -> bytes:
     if not b64_data:
         raise RuntimeError(f"ipfs_get returned no data: {data_resp}")
 
+    if isinstance(b64_data, list): return bytes(b64_data)
     return base64.b64decode(b64_data)
 
 
