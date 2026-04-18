@@ -1,0 +1,12 @@
+diff --git a/subnet/utils/data_structures.py b/subnet/utils/data_structures.py
+index 6c5f920..ed64363 100644
+--- a/subnet/utils/data_structures.py
++++ b/subnet/utils/data_structures.py
+@@ -65,6 +65,7 @@ class ServerInfo:
+ 
+     public_name: Optional[str] = None
+     version: Optional[str] = None
++    beam_pubkey: Optional[str] = None  # Beam wallet pubkey for Idios private settlement
+ 
+     # inference_rps: Optional[RPS] = None # type: ignore
+ 
