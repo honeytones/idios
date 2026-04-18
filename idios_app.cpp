@@ -38,6 +38,7 @@ void On_manager_deploy(const ContractID& unused)
 
     // Derive middleware public key from this wallet
     struct MiddlewareKeyID {
+        uint8_t m_Tag = 'M';
         uint8_t m_Ctx = 1;
     } kid;
     Env::DerivePk(params.middleware_pk, &kid, sizeof(kid));
@@ -105,7 +106,7 @@ void On_user_commit(const ContractID& cid)
     // Derive node public key from this wallet
     struct NodeKeyID {
         ContractID m_Cid;
-        uint8_t    m_Ctx = 2;
+        uint8_t    m_Ctx = 0;
     } kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
@@ -153,46 +154,68 @@ void On_middleware_settle(const ContractID& cid)
 {
     Idios::Settle args;
     Env::Memset(&args, 0, sizeof(args));
-
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
     if (!Env::DocGetBlob("result_hash", args.result_hash, 32)) return On_error("result_hash required");
-    Env::DocGetNum64("attestation_pct", &args.attestation_pct); // optional
-
-    // Derive middleware key
-    struct MiddlewareKeyID {
-        uint8_t m_Ctx = 1;
-    } kid;
+    Env::DocGetNum64("attestation_pct", &args.attestation_pct);
+    uint64_t payment = 0, collateral = 0;
+    uint32_t asset_id = 0;
+    Env::DocGetNum64("payment", &payment);
+    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum32("asset_id", &asset_id);
+    struct MiddlewareKeyID { uint8_t m_Tag; uint8_t m_Ctx; } kid;
+    kid.m_Tag = 'M'; kid.m_Ctx = 1;
     Env::KeyID sigKid(&kid, sizeof(kid));
-
+    FundsChange fc[2];
+    fc[0].m_Amount = payment; fc[0].m_Aid = asset_id; fc[0].m_Consume = 0;
+    fc[1].m_Amount = collateral; fc[1].m_Aid = asset_id; fc[1].m_Consume = 0;
+    uint32_t nFunds = (collateral > 0) ? 2 : 1;
     Env::GenerateKernel(&cid, Idios::Methods::Action_Settle,
-        &args, sizeof(args),
-        nullptr, 0,
-        &sigKid, 1,
-        "Idios: settle job", 0);
+        &args, sizeof(args), fc, nFunds, &sigKid, 1, "Idios: settle job", 0);
 }
-
 void On_middleware_slash(const ContractID& cid)
 {
     Idios::Slash args;
     Env::Memset(&args, 0, sizeof(args));
-
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
-
-    struct MiddlewareKeyID {
-        uint8_t m_Ctx = 1;
-    } kid;
+    uint64_t payment = 0, collateral = 0;
+    uint32_t asset_id = 0;
+    Env::DocGetNum64("payment", &payment);
+    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum32("asset_id", &asset_id);
+    struct MiddlewareKeyID { uint8_t m_Tag; uint8_t m_Ctx; } kid;
+    kid.m_Tag = 'M'; kid.m_Ctx = 1;
     Env::KeyID sigKid(&kid, sizeof(kid));
-
+    FundsChange fc[2];
+    fc[0].m_Amount = payment; fc[0].m_Aid = asset_id; fc[0].m_Consume = 0;
+    fc[1].m_Amount = collateral; fc[1].m_Aid = asset_id; fc[1].m_Consume = 0;
+    uint32_t nFunds = (collateral > 0) ? 2 : 1;
     Env::GenerateKernel(&cid, Idios::Methods::Action_Slash,
-        &args, sizeof(args),
-        nullptr, 0,
-        &sigKid, 1,
-        "Idios: slash job", 0);
+        &args, sizeof(args), fc, nFunds, &sigKid, 1, "Idios: slash job", 0);
+}
+void On_user_get_key(const ContractID& cid)
+{
+    struct UserKeyID {
+        ContractID m_Cid;
+        uint8_t    m_Ctx = 0;
+    } kid;
+    kid.m_Cid = cid;
+    PubKey pk;
+    Env::DerivePk(pk, &kid, sizeof(kid));
+    Env::DocGroup gr("key");
+    Env::DocAddBlob("pub_key", &pk, sizeof(PubKey));
 }
 
-// ----------------------------------------------------------------
-//  View actions — read contract state
-// ----------------------------------------------------------------
+void On_middleware_get_key(const ContractID& cid)
+{
+    struct MiddlewareKeyID {
+        uint8_t m_Tag = 'M';
+        uint8_t m_Ctx = 1;
+    } kid;
+    PubKey pk;
+    Env::DerivePk(pk, &kid, sizeof(kid));
+    Env::DocGroup gr("key");
+    Env::DocAddBlob("pub_key", &pk, sizeof(PubKey));
+}
 
 void On_user_view_job(const ContractID& cid)
 {
@@ -303,10 +326,12 @@ BEAM_EXPORT void Method_1()
         {"commit",   On_user_commit},
         {"refund",   On_user_refund},
         {"view_job", On_user_view_job},
+        {"get_key", On_user_get_key},
     };
     const Actions_map_t MIDDLEWARE_ACTIONS = {
         {"settle", On_middleware_settle},
         {"slash",  On_middleware_slash},
+        {"get_key", On_middleware_get_key},
     };
     const Roles_map_t VALID_ROLES = {
         {"manager",    MANAGER_ACTIONS},

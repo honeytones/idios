@@ -104,6 +104,11 @@ def _beam_invoke(args_str: str) -> dict:
         raise RuntimeError(f"Beam error {code}: {msg}")
     result = data.get("result", {})
     if not result.get("raw_data"):
+        # Contract executed directly and returned a txid — no process step needed
+        txid = result.get("txid", "")
+        if txid and txid != "00000000000000000000000000000000":
+            result["_direct_txid"] = txid
+            return result
         raise RuntimeError(f"No raw_data returned: {data}")
     return result
 
@@ -122,6 +127,8 @@ def _beam_submit(raw_data: str) -> dict:
 
 def _beam_call(args_str: str) -> str:
     invoke = _beam_invoke(args_str)
+    if "_direct_txid" in invoke:
+        return invoke["_direct_txid"]
     submit = _beam_submit(invoke["raw_data"])
     return invoke.get("txid") or submit.get("txid", "unknown")
 
