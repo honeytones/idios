@@ -54,7 +54,7 @@ import requests
 
 HYPERTENSOR_RPC_URL   = os.getenv("HYPERTENSOR_RPC_URL",  "ws://127.0.0.1:9944")
 BEAM_WALLET_API_URL   = os.getenv("BEAM_WALLET_API_URL",  "http://127.0.0.1:10000/api/wallet")
-IDIOS_WASM_PATH       = os.getenv("IDIOS_WASM_PATH",      "/home/tones/idios/idios_app.wasm")
+IDIOS_WASM_PATH       = os.getenv("IDIOS_WASM_PATH",      "idios_app.wasm")
 IDIOS_CID             = os.getenv("IDIOS_CID",
     "e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d")
 
@@ -545,7 +545,7 @@ Env vars (alternative to CLI flags):
             )
         except Exception as e:
             log.error("FAILED: %s", e)
-            log.error("Is wallet-api running?  cd ~/beam-cli && ./wallet-api --use_http=1 --port=10000 ...")
+            log.error("Is wallet-api running? Start wallet-api with: ./wallet-api --enable_assets &")
             sys.exit(1)
         return
 

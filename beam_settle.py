@@ -1,7 +1,7 @@
 import requests
 import json
 
-VAULT_WASM = "/home/tones/beam-cli/vault_anon_master.wasm"
+VAULT_WASM = "vault_anon_master.wasm"
 VAULT_CID  = "a3385e50cf33afc9f769ee1d82d56b73046d680d343977f36d9a303d7bcdc4da"
 
 # Wallet A = Requester (port 10000)

@@ -66,7 +66,7 @@ import requests
 
 BEAM_WALLET_API    = os.getenv("BEAM_WALLET_API",    "http://127.0.0.1:10000/api/wallet")
 HYPERTENSOR_RPC    = os.getenv("HYPERTENSOR_RPC",    "ws://127.0.0.1:9944")
-IDIOS_WASM_PATH    = os.getenv("IDIOS_WASM_PATH",    "/home/tones/idios/idios_app.wasm")
+IDIOS_WASM_PATH    = os.getenv("IDIOS_WASM_PATH",    "idios_app.wasm")
 IDIOS_CID          = os.getenv("IDIOS_CID",
     "e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d")
 BEAM_NODE_ADDR     = os.getenv("BEAM_NODE_ADDR",     "eu-node01.mainnet.beam.mw:8100")
@@ -154,7 +154,7 @@ def beam_create_job(job_id: int, subnet_id: int, node_pk: str, result_hash: str,
 def beam_view_job(job_id: int) -> dict:
     """View job state using beam-wallet CLI , wallet-api invoke_contract cannot read contract vars."""
     import subprocess, json as _json
-    beam_cli = os.getenv("BEAM_CLI_PATH", "/home/tones/beam-cli2/beam-wallet")
+    beam_cli = os.getenv("BEAM_CLI_PATH", "beam-wallet")
     args_str = (
         f"role=user,action=view_job,"
         f"cid={IDIOS_CID},"
@@ -162,8 +162,8 @@ def beam_view_job(job_id: int) -> dict:
     )
     cmd = [
         beam_cli, "shader",
-        "--config_file=/home/tones/beam-cli2/beam-wallet.cfg",
-        "--wallet_path=/home/tones/beam-cli2/wallet.db",
+        "--config_file=beam-wallet.cfg",
+        "--wallet_path=wallet.db",
         f"--shader_app_file={IDIOS_WASM_PATH}",
         f"--shader_args={args_str}",
         f"--node_addr={BEAM_NODE_ADDR}",
