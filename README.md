@@ -112,6 +112,7 @@ hypertensor_trigger.py Hypertensor consensus → Beam settlement trigger
 This guide walks through setting up Idios from scratch on Ubuntu/Linux.
 
 ### Prerequisites
+
 - Ubuntu 20.04+ or similar Linux distro
 - Python 3.10+
 - Git
@@ -121,14 +122,22 @@ This guide walks through setting up Idios from scratch on Ubuntu/Linux.
 
     git clone https://github.com/honeytones/idios.git
     cd idios
+    python3 -m venv venv
+    source venv/bin/activate
     pip install -r requirements.txt
 
 ### 2. Set up Beam CLI Wallet
 
-Download the Beam CLI wallet and wallet-api from the [Beam releases page](https://github.com/BeamMW/beam/releases).
+Create a directory for your wallet and download from the [Beam releases page](https://github.com/BeamMW/beam/releases/tag/beam-7.5.13882):
 
-    unzip linux-beam-wallet-cli-*.zip && tar -xf beam-wallet.tar && chmod +x beam-wallet
-    unzip linux-wallet-api-*.zip && tar -xf wallet-api.tar && chmod +x wallet-api
+    mkdir ~/beam-wallet && cd ~/beam-wallet
+    wget https://github.com/BeamMW/beam/releases/download/beam-7.5.13882/linux-beam-wallet-cli-7.5.13882.zip
+    wget https://github.com/BeamMW/beam/releases/download/beam-7.5.13882/linux-wallet-api-7.5.13882.zip
+    unzip linux-beam-wallet-cli-7.5.13882.zip && tar -xf beam-wallet.tar && chmod +x beam-wallet
+    unzip linux-wallet-api-7.5.13882.zip && tar -xf wallet-api.tar && chmod +x wallet-api
+
+Create a new wallet (save your seed phrase securely):
+
     ./beam-wallet init --node_addr=eu-node01.mainnet.beam.mw:8100
 
 Create wallet-api.cfg in the same directory:
@@ -143,31 +152,35 @@ Create wallet-api.cfg in the same directory:
 
 ### 3. Download the Idios App Shader
 
-    wget https://github.com/honeytones/idios/raw/main/idios_app.wasm
+    wget https://github.com/honeytones/idios/raw/main/idios_app.wasm -O ~/beam-wallet/idios_app.wasm
 
-The Idios contract is deployed on Beam mainnet:
+The Idios contract is already deployed on Beam mainnet:
 
     CID: e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d
 
 ### 4. Set up Hypertensor subnet-template
 
-    git clone https://github.com/hypertensor-blockchain/subnet-template.git
-    cd subnet-template
-    python3 -m venv venv && source venv/bin/activate && pip install -e .
+    git clone https://github.com/hypertensor-blockchain/subnet-template.git ~/subnet-template
+    cd ~/subnet-template
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -e .
 
 ### 5. Start the wallet-api
 
-    ./wallet-api --enable_assets &
+    cd ~/beam-wallet && ./wallet-api --enable_assets &
 
 Verify it is running:
 
     curl -s -d '{"jsonrpc":"2.0","id":1,"method":"wallet_status"}' -H "Content-Type: application/json" -X POST http://127.0.0.1:10000/api/wallet
 
+You should see your wallet balance in the response.
+
 ### 6. Get your node Beam public key
 
 Share this with requesters so they can lock payment to your node:
 
-    ./beam-wallet shader --shader_app_file=idios_app.wasm --shader_args="role=user,action=get_key,cid=e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d" --node_addr=eu-node01.mainnet.beam.mw:8100
+    cd ~/beam-wallet && ./beam-wallet shader --shader_app_file=idios_app.wasm --shader_args="role=user,action=get_key,cid=e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d" --node_addr=eu-node01.mainnet.beam.mw:8100
 
 ---
 ## Running
