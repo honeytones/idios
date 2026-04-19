@@ -106,6 +106,70 @@ hypertensor_trigger.py Hypertensor consensus → Beam settlement trigger
 
 ---
 
+
+## Setup Guide
+
+This guide walks through setting up Idios from scratch on Ubuntu/Linux.
+
+### Prerequisites
+- Ubuntu 20.04+ or similar Linux distro
+- Python 3.10+
+- Git
+- A small amount of BEAM for transaction fees
+
+### 1. Clone Idios
+
+    git clone https://github.com/honeytones/idios.git
+    cd idios
+    pip install -r requirements.txt
+
+### 2. Set up Beam CLI Wallet
+
+Download the Beam CLI wallet and wallet-api from the [Beam releases page](https://github.com/BeamMW/beam/releases).
+
+    unzip linux-beam-wallet-cli-*.zip && tar -xf beam-wallet.tar && chmod +x beam-wallet
+    unzip linux-wallet-api-*.zip && tar -xf wallet-api.tar && chmod +x wallet-api
+    ./beam-wallet init --node_addr=eu-node01.mainnet.beam.mw:8100
+
+Create wallet-api.cfg in the same directory:
+
+    pass=YOUR_PASSWORD
+    wallet_path=wallet.db
+    node_addr=eu-node01.mainnet.beam.mw:8100
+    use_http=1
+    port=10000
+
+    chmod 600 wallet-api.cfg
+
+### 3. Download the Idios App Shader
+
+    wget https://github.com/honeytones/idios/raw/main/idios_app.wasm
+
+The Idios contract is deployed on Beam mainnet:
+
+    CID: e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d
+
+### 4. Set up Hypertensor subnet-template
+
+    git clone https://github.com/hypertensor-blockchain/subnet-template.git
+    cd subnet-template
+    python3 -m venv venv && source venv/bin/activate && pip install -e .
+
+### 5. Start the wallet-api
+
+    ./wallet-api --enable_assets &
+
+Verify it is running:
+
+    curl -s -d '{"jsonrpc":"2.0","id":1,"method":"wallet_status"}' -H "Content-Type: application/json" -X POST http://127.0.0.1:10000/api/wallet
+
+### 6. Get your node Beam public key
+
+Share this with requesters so they can lock payment to your node:
+
+    ./beam-wallet shader --shader_app_file=idios_app.wasm --shader_args="role=user,action=get_key,cid=e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d" --node_addr=eu-node01.mainnet.beam.mw:8100
+
+---
 ## Running
 
 ### Prerequisites
@@ -117,20 +181,19 @@ hypertensor_trigger.py Hypertensor consensus → Beam settlement trigger
 ### Start Beam wallet-api
 
 ```bash
-cd ~/beam-cli && ./wallet-api \
+./wallet-api \
   --node_addr=eu-node01.mainnet.beam.mw:8100 \
-  --use_http=1 --port=10000 \
-  --wallet_path=wallet.db --pass=YOUR_PASSWORD \
+
+
   --enable_assets
 ```
 
-⚠️ Always restart wallet-api after rebuilding `idios_app.wasm` — it caches the wasm per connection.
 
 ### Create a job (requester)
 
 ```bash
-cd ~/beam-cli && ./beam-wallet shader \
-  --shader_app_file=/home/tones/idios/idios_app.wasm \
+./beam-wallet shader \
+  --shader_app_file=idios_app.wasm \
   --shader_args="role=user,action=create,\
 cid=e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d,\
 job_id=2,subnet_id=1,epoch=1,expiry_block=3900000,\
@@ -143,8 +206,8 @@ result_hash=<RESULT_HASH_HEX>" \
 ### Commit (node)
 
 ```bash
-cd ~/beam-cli2 && ./beam-wallet shader \
-  --shader_app_file=/home/tones/idios/idios_app.wasm \
+./beam-wallet shader \
+  --shader_app_file=idios_app.wasm \
   --shader_args="role=user,action=commit,\
 cid=e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d,\
 job_id=2,collateral=5000000,asset_id=0" \
@@ -179,17 +242,13 @@ python hypertensor_trigger.py ... --mnemonic "..." --ht_test
 
 ### Build contract from source
 
+Requires the [Beam Shader SDK](https://github.com/BeamMW/shader-sdk). Source files are `idios_contract.h`, `idios_contract.cpp`, and `idios_app.cpp`.
+
 ```bash
-# Rebuild contract shader
-cd ~/shader-sdk/build/wasi && ninja idios_contract
-cp ~/shader-sdk/build/wasi/shaders/idios/idios_contract.wasm ~/idios/
-
-# Rebuild app shader
-cd ~/shader-sdk/build/wasi && ninja idios_app
-cp ~/shader-sdk/build/wasi/shaders/idios/idios_app.wasm ~/idios/
+# From shader-sdk/build/wasi
+ninja idios_contract && cp shaders/idios/idios_contract.wasm /path/to/idios/
+ninja idios_app && cp shaders/idios/idios_app.wasm /path/to/idios/
 ```
-
-Source files live in `~/shader-sdk/shaders/idios/`.
 
 ---
 
