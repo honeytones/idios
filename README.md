@@ -2,9 +2,9 @@
 
 **Private settlement layer for decentralised AI networks.**
 
-Idios connects [Hypertensor](https://hypertensor.org) AI inference with [Beam MimbleWimble](https://beam.mw) private payments. When a Hypertensor subnet reaches consensus on a completed job, Idios automatically releases payment to the node — or slashes collateral if consensus fails — with no public record of amounts or identities on either chain.
+Idios connects [Hypertensor](https://hypertensor.org) AI inference with [Beam MimbleWimble](https://beam.mw) private payments. When a Hypertensor subnet reaches consensus on a completed job, Idios automatically releases payment to the node , or slashes collateral if consensus fails , with no public record of amounts or identities on either chain.
 
-> "Run AI on sensitive data — privately, verifiably, without trusting any single party."
+> "Run AI on sensitive data , privately, verifiably, without trusting any single party."
 
 ---
 
@@ -13,7 +13,7 @@ Idios connects [Hypertensor](https://hypertensor.org) AI inference with [Beam Mi
 Hypertensor's settlement layer is public. Anyone can see which wallets paid for AI work, which nodes were rewarded, and how much changed hands. For enterprise clients and anyone running inference on sensitive data, that's a dealbreaker regardless of how capable the AI layer is.
 
 
-Idios is the community answer — specifically for settlement and payment privacy, which is achievable today without waiting for inference privacy to mature.
+Idios is the community answer , specifically for settlement and payment privacy, which is achievable today without waiting for inference privacy to mature.
 
 ---
 
@@ -39,15 +39,15 @@ Requester                 Middleware               Node
 
 **Three components:**
 
-- **Hypertensor** — AI work, consensus, node scoring
-- **Idios middleware** — connects both systems (this repo)
-- **Beam MimbleWimble** — private escrow, payment release, slashing
+- **Hypertensor** , AI work, consensus, node scoring
+- **Idios middleware** , connects both systems (this repo)
+- **Beam MimbleWimble** , private escrow, payment release, slashing
 
 **Job lifecycle:**
 
-1. Requester calls `create` — locks payment + specifies node pubkey and result hash
-2. Node calls `commit` — locks collateral, job goes Active
-3. Hypertensor epoch closes — middleware detects `RewardResult` event
+1. Requester calls `create` , locks payment + specifies node pubkey and result hash
+2. Node calls `commit` , locks collateral, job goes Active
+3. Hypertensor epoch closes , middleware detects `RewardResult` event
 4. ≥66% attestation → middleware calls `settle` → payment releases privately to node
 5. <66% attestation → middleware calls `slash` → collateral burned, requester refunded
 
@@ -66,7 +66,7 @@ Requester                 Middleware               Node
 **In progress:**
 
 - End-to-end test with live Hypertensor node (pending mainnet launch)
-- Hypertensor DHT custom field — nodes broadcast Beam pubkeys in heartbeat
+- Hypertensor DHT custom field , nodes broadcast Beam pubkeys in heartbeat
 
 ---
 
@@ -98,7 +98,7 @@ Deployed height: 3813751
 
 ```
 idios_contract.h       Contract Shader header (job struct, method IDs)
-idios_contract.cpp     Contract Shader (on-chain logic — escrow, settle, slash)
+idios_contract.cpp     Contract Shader (on-chain logic , escrow, settle, slash)
 idios_app.cpp          App Shader (wallet-side transaction builder)
 beam_settle.py         Beam Wallet API helpers
 hypertensor_trigger.py Hypertensor consensus → Beam settlement trigger
@@ -269,21 +269,21 @@ ninja idios_app && cp shaders/idios/idios_app.wasm /path/to/idios/
 
 TENSOR and BEAM serve completely different functions and one strengthens the other.
 
-TENSOR governs Hypertensor — staking, node scoring, emissions, subnet participation. None of that changes with Idios. Nodes still earn TENSOR emissions through Hypertensor consensus.
+TENSOR governs Hypertensor , staking, node scoring, emissions, subnet participation. None of that changes with Idios. Nodes still earn TENSOR emissions through Hypertensor consensus.
 
 What Idios adds is a separate private settlement layer for individual job payments. A requester deposits BEAM into escrow. When consensus confirms the job is done, that payment releases privately to the node. Two separate reward streams, neither cannibalising the other.
 
-Private settlement expands the addressable market for Hypertensor subnets — enterprise clients and regulated industries that can't use a subnet with public payment records become viable customers. More demand for subnet capacity means more demand for TENSOR staking.
+Private settlement expands the addressable market for Hypertensor subnets , enterprise clients and regulated industries that can't use a subnet with public payment records become viable customers. More demand for subnet capacity means more demand for TENSOR staking.
 
 ---
 
 ## Architecture notes
 
-**No bridge, no cross-chain protocol.** Beam and Hypertensor never communicate. The middleware is the only connection — a lightweight Python process running alongside the node operator's existing stack.
+**No bridge, no cross-chain protocol.** Beam and Hypertensor never communicate. The middleware is the only connection , a lightweight Python process running alongside the node operator's existing stack.
 
-**Key derivation.** The middleware key is derived from the contract ID with a different context byte than user/node keys, so it can never be confused with a user key. Both use `Env::DerivePk` in the App Shader and `Env::AddSig` in the Contract Shader — native Beam multisig, not custom signatures.
+**Key derivation.** The middleware key is derived from the contract ID with a different context byte than user/node keys, so it can never be confused with a user key. Both use `Env::DerivePk` in the App Shader and `Env::AddSig` in the Contract Shader , native Beam multisig, not custom signatures.
 
-**Why `attest_data` isn't used for hash verification.** Hypertensor documents `attest_data` as "not used on-chain anywhere" — it's exchanged peer-to-peer between validators. Result hash verification is therefore the subnet's responsibility before calling the trigger. The trigger's only question to Hypertensor is: did this epoch pass 66% attestation?
+**Why `attest_data` isn't used for hash verification.** Hypertensor documents `attest_data` as "not used on-chain anywhere" , it's exchanged peer-to-peer between validators. Result hash verification is therefore the subnet's responsibility before calling the trigger. The trigger's only question to Hypertensor is: did this epoch pass 66% attestation?
 
 **Settle/slash args are explicit.** `VarReader::Read_T` in the App Shader transaction context doesn't reliably find contract vars. Payment, collateral, and asset_id are passed explicitly and validated by the contract.
 
@@ -292,11 +292,11 @@ Private settlement expands the addressable market for Hypertensor subnets — en
 ## Roadmap
 
 - [ ] End-to-end test with live Hypertensor node
-- [ ] Hypertensor DHT heartbeat field — nodes broadcast Beam pubkeys
+- [ ] Hypertensor DHT heartbeat field , nodes broadcast Beam pubkeys
 - [ ] Automatic slash for dissenting individual nodes (currently slashes on epoch failure)
 - [ ] Multi-node attestation (3-of-N middleware keys via Beam seamless multisig)
 - [ ] IPFS job payload delivery via Beam's private IPFS network
-- [ ] Nephrite (asset_id=47) payment support — fully implemented, needs testing
+- [ ] Nephrite (asset_id=47) payment support , fully implemented, needs testing
 - [ ] Consider Bittensor / Akash as additional target networks
 
 ---
