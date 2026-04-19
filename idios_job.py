@@ -1,5 +1,5 @@
 """
-idios_job.py — Idios Complete Job Flow
+idios_job.py , Idios Complete Job Flow
 
 Single script for a requester to create and monitor a complete Idios job.
 
@@ -104,7 +104,7 @@ def _beam_invoke(args_str: str) -> dict:
         raise RuntimeError(f"Beam error {code}: {msg}")
     result = data.get("result", {})
     if not result.get("raw_data"):
-        # Contract executed directly and returned a txid — no process step needed
+        # Contract executed directly and returned a txid , no process step needed
         txid = result.get("txid", "")
         if txid and txid != "00000000000000000000000000000000":
             result["_direct_txid"] = txid
@@ -148,11 +148,11 @@ def beam_create_job(job_id: int, subnet_id: int, node_pk: str, result_hash: str,
         f"result_hash={result_hash}"
     )
     txid = _beam_call(args)
-    log.info("Job created — txid=%s", txid)
+    log.info("Job created , txid=%s", txid)
     return txid
 
 def beam_view_job(job_id: int) -> dict:
-    """View job state using beam-wallet CLI — wallet-api invoke_contract cannot read contract vars."""
+    """View job state using beam-wallet CLI , wallet-api invoke_contract cannot read contract vars."""
     import subprocess, json as _json
     beam_cli = os.getenv("BEAM_CLI_PATH", "/home/tones/beam-cli2/beam-wallet")
     args_str = (
@@ -199,7 +199,7 @@ def wait_for_active(job_id: int, timeout_secs: int = 600) -> bool:
             status = int(state.get("status", -1))
             log.info("Job %d status: %s", job_id, STATUS_NAMES.get(status, status))
             if status == 1:  # Active
-                log.info("Job %d is Active — node committed collateral", job_id)
+                log.info("Job %d is Active , node committed collateral", job_id)
                 return True
             if status in TERMINAL:
                 log.warning("Job %d already in terminal state: %s", job_id, STATUS_NAMES.get(status))
@@ -336,7 +336,7 @@ def cmd_status(args):
 
 
 def cmd_run(args):
-    """Full flow — create job, wait for commit, watch for settlement."""
+    """Full flow , create job, wait for commit, watch for settlement."""
     from idios_payload import RequesterPayload
 
     mnemonic = args.mnemonic or MIDDLEWARE_MNEMONIC
@@ -382,7 +382,7 @@ def cmd_run(args):
 
     # Wait for node commit
     if not wait_for_active(args.job_id):
-        log.error("Job never went Active — node did not commit. Check node is running.")
+        log.error("Job never went Active , node did not commit. Check node is running.")
         sys.exit(1)
 
     # Watch for consensus and settle
@@ -402,7 +402,7 @@ def cmd_run(args):
 
 def main():
     p = argparse.ArgumentParser(
-        description="Idios — complete job flow",
+        description="Idios , complete job flow",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = p.add_subparsers(dest="cmd")
@@ -435,7 +435,7 @@ def main():
     s.add_argument("--job_id", type=int, required=True)
 
     # -- run --
-    r = sub.add_parser("run", help="Full flow — create, wait for commit, watch, settle")
+    r = sub.add_parser("run", help="Full flow , create, wait for commit, watch, settle")
     r.add_argument("--job_id",        type=int, required=True)
     r.add_argument("--subnet_id",     type=int, required=True)
     r.add_argument("--node_beam_pk",  type=str, required=True)

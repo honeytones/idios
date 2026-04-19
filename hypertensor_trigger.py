@@ -1,9 +1,9 @@
 """
-hypertensor_trigger.py — Idios Settlement Trigger
+hypertensor_trigger.py , Idios Settlement Trigger
 
 Watches Hypertensor for epoch consensus, then fires settle or slash on Beam.
 Uses the Hypertensor class from subnet-template/subnet/substrate/chain_functions.py
-directly — no guesswork, exact same patterns as consensus.py.
+directly , no guesswork, exact same patterns as consensus.py.
 
 Usage:
     python hypertensor_trigger.py \
@@ -22,7 +22,7 @@ Config:
     Edit the CONFIG block or use env vars / CLI flags.
 
 How it works:
-    Uses get_reward_result_event(subnet_id, epoch) — the Network.RewardResult event —
+    Uses get_reward_result_event(subnet_id, epoch) , the Network.RewardResult event ,
     which fires at the end of each epoch and carries the attestation_percentage directly.
     This is the cleanest hook: one call, definitive result, no polling storage maps.
 
@@ -49,7 +49,7 @@ from typing import Optional
 import requests
 
 # ---------------------------------------------------------------------------
-# CONFIG — edit or override via env vars / CLI
+# CONFIG , edit or override via env vars / CLI
 # ---------------------------------------------------------------------------
 
 HYPERTENSOR_RPC_URL   = os.getenv("HYPERTENSOR_RPC_URL",  "ws://127.0.0.1:9944")
@@ -58,7 +58,7 @@ IDIOS_WASM_PATH       = os.getenv("IDIOS_WASM_PATH",      "/home/tones/idios/idi
 IDIOS_CID             = os.getenv("IDIOS_CID",
     "e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d")
 
-# Middleware mnemonic — the wallet that holds the middleware key in the Idios contract
+# Middleware mnemonic , the wallet that holds the middleware key in the Idios contract
 MIDDLEWARE_MNEMONIC   = os.getenv("MIDDLEWARE_MNEMONIC", "")
 
 ATTESTATION_THRESHOLD = int(os.getenv("ATTESTATION_THRESHOLD", "66"))
@@ -95,7 +95,7 @@ class EpochResult:
 
 
 # ---------------------------------------------------------------------------
-# Hypertensor — import the real SDK from subnet-template
+# Hypertensor , import the real SDK from subnet-template
 # ---------------------------------------------------------------------------
 
 def _load_hypertensor(mnemonic: str) -> "Hypertensor":
@@ -123,7 +123,7 @@ def _load_hypertensor(mnemonic: str) -> "Hypertensor":
 
 
 # ---------------------------------------------------------------------------
-# Consensus detection — uses the exact same pattern as consensus.py
+# Consensus detection , uses the exact same pattern as consensus.py
 # ---------------------------------------------------------------------------
 
 def get_current_epoch(ht) -> Optional[int]:
@@ -151,7 +151,7 @@ def get_epoch_length(ht) -> int:
 
 
 def get_current_subnet_epoch(ht, subnet_id: int) -> Optional[int]:
-    """Current epoch — global epoch in this runtime."""
+    """Current epoch , global epoch in this runtime."""
     return get_current_epoch(ht)
 
 
@@ -176,7 +176,7 @@ def wait_for_epoch_close(ht, subnet_id: int, target_epoch: int) -> bool:
         block = ht.get_block_number()
         blocks_remaining = ((target_epoch + 1) * epoch_length) - int(str(block))
         sleep_secs = max(1, blocks_remaining * block_secs - 2)
-        log.debug("Epoch %d/%d — %d blocks remaining, sleeping %ds", current, target_epoch, blocks_remaining, sleep_secs)
+        log.debug("Epoch %d/%d , %d blocks remaining, sleeping %ds", current, target_epoch, blocks_remaining, sleep_secs)
         time.sleep(sleep_secs)
 
 
@@ -188,7 +188,7 @@ def get_epoch_result(ht, subnet_id: int, epoch: int) -> Optional[EpochResult]:
       block = epoch_length * (epoch + 1)
     e.g. epoch 149 result is at block 1500, epoch 150 at block 1510.
 
-    attestation_percentage is scaled by 1e18 — divide by 1e18 * 100 for 0-100.
+    attestation_percentage is scaled by 1e18 , divide by 1e18 * 100 for 0-100.
     """
     try:
         from substrateinterface import SubstrateInterface
@@ -228,7 +228,7 @@ def get_epoch_result(ht, subnet_id: int, epoch: int) -> Optional[EpochResult]:
                 passed = attestation_pct >= ATTESTATION_THRESHOLD
 
                 log.info(
-                    "RewardResult — subnet=%d epoch=%d attestation=%d%% → %s",
+                    "RewardResult , subnet=%d epoch=%d attestation=%d%% → %s",
                     subnet_id, epoch, attestation_pct,
                     "PASSED ✅" if passed else "FAILED ❌"
                 )
@@ -272,7 +272,7 @@ def get_epoch_result_from_consensus_data(ht, subnet_id: int, epoch: int) -> Opti
         passed = attestation_pct >= ATTESTATION_THRESHOLD
 
         log.info(
-            "ConsensusData fallback — subnet=%d epoch=%d attests=%d/%d (%d%%) → %s",
+            "ConsensusData fallback , subnet=%d epoch=%d attests=%d/%d (%d%%) → %s",
             subnet_id, epoch, attest_count, total_validators, attestation_pct,
             "PASSED ✅" if passed else "FAILED ❌"
         )
@@ -288,7 +288,7 @@ def get_epoch_result_from_consensus_data(ht, subnet_id: int, epoch: int) -> Opti
 # ---------------------------------------------------------------------------
 
 def _beam_invoke(args_str: str) -> dict:
-    """Step 1 — run App Shader locally, returns raw_data. Does NOT broadcast."""
+    """Step 1 , run App Shader locally, returns raw_data. Does NOT broadcast."""
     payload = {
         "jsonrpc": "2.0", "id": 1,
         "method":  "invoke_contract",
@@ -305,7 +305,7 @@ def _beam_invoke(args_str: str) -> dict:
         code = data["error"].get("code")
         msg  = data["error"].get("message", "")
         if code == -32019: raise RuntimeError(f"Contract Halt (-32019): {msg}")
-        if code == -32018: raise RuntimeError(f"Compile error — restart wallet-api after wasm rebuild: {msg}")
+        if code == -32018: raise RuntimeError(f"Compile error , restart wallet-api after wasm rebuild: {msg}")
         if code == -32020: raise RuntimeError(f"ACL denied: {msg}")
         raise RuntimeError(f"Beam error {code}: {msg}")
 
@@ -320,7 +320,7 @@ def _beam_invoke(args_str: str) -> dict:
 
 
 def _beam_submit(raw_data: str) -> dict:
-    """Step 2 — broadcast to Beam network."""
+    """Step 2 , broadcast to Beam network."""
     payload = {
         "jsonrpc": "2.0", "id": 2,
         "method":  "process_invoke_data",
@@ -394,7 +394,7 @@ TERMINAL     = {2, 3, 4}
 
 def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = None, mock_settle: bool = False):
     log.info(
-        "Idios trigger starting — job=%d  subnet=%d  threshold=%d%%",
+        "Idios trigger starting , job=%d  subnet=%d  threshold=%d%%",
         job.job_id, job.subnet_id, ATTESTATION_THRESHOLD
     )
 
@@ -403,7 +403,7 @@ def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = Non
         state = beam_view_job(job.job_id)
         status = int(state.get("status", -1))
         if status in TERMINAL:
-            log.info("Job %d is already %s — nothing to do.", job.job_id, STATUS_NAMES.get(status))
+            log.info("Job %d is already %s , nothing to do.", job.job_id, STATUS_NAMES.get(status))
             return
         log.info("Beam job %d status: %s", job.job_id, STATUS_NAMES.get(status, status))
     except Exception as e:
@@ -411,10 +411,10 @@ def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = Non
 
     # ── Mock settle (bypass Hypertensor) ─────────────────────────────────
     if mock_settle:
-        log.info("Mock settle enabled — bypassing Hypertensor, firing settle directly")
+        log.info("Mock settle enabled , bypassing Hypertensor, firing settle directly")
         try:
             txid = beam_settle(job, 100)
-            log.info("✅ Settled (mock) — job=%d  txid=%s", job.job_id, txid)
+            log.info("✅ Settled (mock) , job=%d  txid=%s", job.job_id, txid)
         except Exception as e:
             log.error("Settle failed: %s", e)
             sys.exit(1)
@@ -430,17 +430,17 @@ def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = Non
     else:
         current = get_current_subnet_epoch(ht, job.subnet_id)
         if current is None:
-            log.error("Cannot determine current epoch for subnet %d — is the node running?", job.subnet_id)
+            log.error("Cannot determine current epoch for subnet %d , is the node running?", job.subnet_id)
             sys.exit(1)
         epoch = current
-        log.info("Current epoch: %d — will watch for this epoch to close", epoch)
+        log.info("Current epoch: %d , will watch for this epoch to close", epoch)
 
     # ── Wait for epoch to close ───────────────────────────────────────────
     if not wait_for_epoch_close(ht, job.subnet_id, epoch):
-        log.error("Epoch wait failed — exiting")
+        log.error("Epoch wait failed , exiting")
         sys.exit(1)
 
-    # ── Get result — try RewardResult event first, fall back to ConsensusData ──
+    # ── Get result , try RewardResult event first, fall back to ConsensusData ──
     result = get_epoch_result(ht, job.subnet_id, epoch)
 
     if result is None:
@@ -459,14 +459,14 @@ def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = Non
     if result.passed:
         try:
             txid = beam_settle(job, result.attestation_pct)
-            log.info("✅ Settled — job=%d  epoch=%d  txid=%s", job.job_id, epoch, txid)
+            log.info("✅ Settled , job=%d  epoch=%d  txid=%s", job.job_id, epoch, txid)
         except Exception as e:
             log.error("Settle failed: %s", e)
             sys.exit(1)
     else:
         try:
             txid = beam_slash(job)
-            log.info("⚡ Slashed — job=%d  epoch=%d  txid=%s", job.job_id, epoch, txid)
+            log.info("⚡ Slashed , job=%d  epoch=%d  txid=%s", job.job_id, epoch, txid)
         except Exception as e:
             log.error("Slash failed: %s", e)
             sys.exit(1)
@@ -478,11 +478,11 @@ def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = Non
 
 def main():
     p = argparse.ArgumentParser(
-        description="Idios — Hypertensor→Beam settlement trigger",
+        description="Idios , Hypertensor→Beam settlement trigger",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Normal — watch current epoch, settle or slash when it closes
+  # Normal , watch current epoch, settle or slash when it closes
   python hypertensor_trigger.py \\
     --job_id 2 --subnet_id 1 \\
     --result_hash aabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd \\
@@ -520,11 +520,11 @@ Env vars (alternative to CLI flags):
                    default=MIDDLEWARE_MNEMONIC,
                    help="Middleware wallet mnemonic (or set MIDDLEWARE_MNEMONIC env var)")
     p.add_argument("--beam_test",   action="store_true",
-                   help="Test Beam connection only — reads job state and exits")
+                   help="Test Beam connection only , reads job state and exits")
     p.add_argument("--ht_test",     action="store_true",
-                   help="Test Hypertensor connection only — reads epoch and exits")
+                   help="Test Hypertensor connection only , reads epoch and exits")
     p.add_argument("--mock_settle",  action="store_true",
-                   help="Mock a passing attestation (100%%) — bypasses Hypertensor, fires settle directly")
+                   help="Mock a passing attestation (100%%) , bypasses Hypertensor, fires settle directly")
     args = p.parse_args()
 
     job = JobParams(

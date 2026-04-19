@@ -53,7 +53,7 @@ void On_manager_view(const ContractID& unused)
 }
 
 // ----------------------------------------------------------------
-//  User actions — job lifecycle
+//  User actions , job lifecycle
 // ----------------------------------------------------------------
 
 void On_user_create(const ContractID& cid)
@@ -78,10 +78,10 @@ void On_user_create(const ContractID& cid)
     kid.m_Cid = cid;
     Env::DerivePk(args.requester_pk, &kid, sizeof(kid));
 
-    // SigRequest — requester must sign
+    // SigRequest , requester must sign
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    // FundsChange — payment moves from wallet into contract
+    // FundsChange , payment moves from wallet into contract
     FundsChange fc;
     fc.m_Amount  = args.payment;
     fc.m_Aid     = args.asset_id;
@@ -111,7 +111,7 @@ void On_user_commit(const ContractID& cid)
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    // FundsChange — collateral moves from wallet into contract
+    // FundsChange , collateral moves from wallet into contract
     FundsChange fc;
     fc.m_Amount  = args.collateral;
     fc.m_Aid     = args.asset_id;
@@ -156,7 +156,7 @@ void On_user_refund(const ContractID& cid)
 }
 
 // ----------------------------------------------------------------
-//  Middleware actions — settlement
+//  Middleware actions , settlement
 // ----------------------------------------------------------------
 
 void On_middleware_settle(const ContractID& cid)
@@ -259,7 +259,7 @@ void On_user_view_job(const ContractID& cid)
 }
 
 // ----------------------------------------------------------------
-//  Method_0 — schema export
+//  Method_0 , schema export
 // ----------------------------------------------------------------
 
 BEAM_EXPORT void Method_0()
@@ -321,7 +321,7 @@ BEAM_EXPORT void Method_0()
 }
 
 // ----------------------------------------------------------------
-//  Method_1 — dispatch
+//  Method_1 , dispatch
 // ----------------------------------------------------------------
 
 BEAM_EXPORT void Method_1()

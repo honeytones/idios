@@ -1,8 +1,8 @@
 """
-idios_consensus.py — Idios Consensus Integration (V1)
+idios_consensus.py , Idios Consensus Integration (V1)
 
 Extends the Hypertensor Consensus class to fire Beam settlement
-immediately after each epoch closes — no polling, no separate watcher.
+immediately after each epoch closes , no polling, no separate watcher.
 
 Usage:
     Replace the Consensus class in server.py with IdiosConsensus:
@@ -85,7 +85,7 @@ class IdiosConsensus(Consensus):
             await self.idios_settle_or_slash(current_epoch)
 
     async def idios_settle_or_slash(self, epoch: int):
-        log.info("[Idios] Epoch %d closed — checking %d job(s)", epoch, len(self._idios_jobs))
+        log.info("[Idios] Epoch %d closed , checking %d job(s)", epoch, len(self._idios_jobs))
         if not self._idios_jobs:
             return
 
@@ -94,7 +94,7 @@ class IdiosConsensus(Consensus):
             log.info("[Idios] RewardResult not found, trying ConsensusData fallback...")
             result = get_epoch_result_from_consensus_data(self.hypertensor, self.subnet_id, epoch)
         if result is None:
-            log.warning("[Idios] Could not determine result for epoch %d — retrying next epoch", epoch)
+            log.warning("[Idios] Could not determine result for epoch %d , retrying next epoch", epoch)
             return
 
         log.info("[Idios] Epoch %d: attestation=%d%% → %s", epoch, result.attestation_pct,
@@ -106,21 +106,21 @@ class IdiosConsensus(Consensus):
                 state = beam_view_job(job.job_id)
                 status = int(state.get("status", -1))
                 if status in TERMINAL:
-                    log.info("[Idios] Job %d already %s — removing", job.job_id, STATUS_NAMES.get(status))
+                    log.info("[Idios] Job %d already %s , removing", job.job_id, STATUS_NAMES.get(status))
                     completed.append(job)
                     continue
                 if status != 1:
-                    log.info("[Idios] Job %d is %s — skipping", job.job_id, STATUS_NAMES.get(status, status))
+                    log.info("[Idios] Job %d is %s , skipping", job.job_id, STATUS_NAMES.get(status, status))
                     continue
                 if result.passed:
                     txid = beam_settle(job, result.attestation_pct)
-                    log.info("[Idios] ✅ Settled — job=%d epoch=%d txid=%s", job.job_id, epoch, txid)
+                    log.info("[Idios] ✅ Settled , job=%d epoch=%d txid=%s", job.job_id, epoch, txid)
                 else:
                     txid = beam_slash(job)
-                    log.info("[Idios] ⚡ Slashed — job=%d epoch=%d txid=%s", job.job_id, epoch, txid)
+                    log.info("[Idios] ⚡ Slashed , job=%d epoch=%d txid=%s", job.job_id, epoch, txid)
                 completed.append(job)
             except Exception as e:
-                log.error("[Idios] Error on job %d: %s — will retry next epoch", job.job_id, e)
+                log.error("[Idios] Error on job %d: %s , will retry next epoch", job.job_id, e)
 
         for job in completed:
             self._idios_jobs.remove(job)

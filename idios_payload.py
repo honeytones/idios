@@ -1,5 +1,5 @@
 """
-idios_payload.py — Idios Job Payload Delivery via Beam Private IPFS
+idios_payload.py , Idios Job Payload Delivery via Beam Private IPFS
 
 Handles encrypted job payload routing between requester and node.
 Uses Beam's private IPFS network (separate from public IPFS via swarm key).
@@ -86,7 +86,7 @@ def generate_rsa_keypair() -> Tuple[bytes, bytes]:
 
     Node operators run this once and store the private key securely.
     The public key goes into the DHT heartbeat beam_pubkey field
-    (or as a separate rsa_pubkey field — see note below).
+    (or as a separate rsa_pubkey field , see note below).
 
     Note: beam_pubkey in ServerInfo stores the Beam wallet pubkey (hex).
     For RSA encryption of job payloads, nodes need a separate RSA key.
@@ -121,11 +121,11 @@ def rsa_encrypt(data: bytes, public_key_pem: bytes) -> bytes:
     public_key = serialization.load_pem_public_key(public_key_pem)
 
     if len(data) <= RSA_MAX_CHUNK:
-        # Small payload — direct RSA encryption
+        # Small payload , direct RSA encryption
         encrypted = public_key.encrypt(data, _OAEP_PADDING)
         return b"RSA:" + base64.b64encode(encrypted)
     else:
-        # Large payload — hybrid RSA+AES encryption
+        # Large payload , hybrid RSA+AES encryption
         return _hybrid_encrypt(data, public_key)
 
 
@@ -141,7 +141,7 @@ def rsa_decrypt(encrypted_data: bytes, private_key_pem: bytes) -> bytes:
         # Hybrid decryption
         return _hybrid_decrypt(encrypted_data[4:], private_key)
     else:
-        raise ValueError("Unknown encryption format — expected RSA: or HYB: prefix")
+        raise ValueError("Unknown encryption format , expected RSA: or HYB: prefix")
 
 
 def _hybrid_encrypt(data: bytes, public_key: RSAPublicKey) -> bytes:
@@ -201,7 +201,7 @@ def hash_result(result: Any) -> str:
     The node produces this hash after inference and includes it in attest_data.
     """
     if isinstance(result, (dict, list)):
-        # Deterministic JSON serialisation — sorted keys, no whitespace
+        # Deterministic JSON serialisation , sorted keys, no whitespace
         serialised = json.dumps(result, sort_keys=True, separators=(",", ":")).encode()
     elif isinstance(result, str):
         serialised = result.encode()
@@ -243,7 +243,7 @@ def ipfs_add(api_url: str, data: bytes) -> str:
     if not cid:
         raise RuntimeError(f"ipfs_add returned no hash: {data_resp}")
 
-    log.info("Uploaded to Beam IPFS — CID: %s", cid)
+    log.info("Uploaded to Beam IPFS , CID: %s", cid)
     return cid
 
 
@@ -276,7 +276,7 @@ def ipfs_get(api_url: str, cid: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Requester — prepare job
+# Requester , prepare job
 # ---------------------------------------------------------------------------
 
 class RequesterPayload:
@@ -298,7 +298,7 @@ class RequesterPayload:
         Prepare a job for submission to Idios.
 
         Args:
-            payload: The inference input — dict, string, or bytes
+            payload: The inference input , dict, string, or bytes
             node_rsa_pubkey_pem: Node's RSA public key in PEM format
             expected_result: If known in advance, the expected output for hash
                            If None, requester and node must agree out-of-band
@@ -312,7 +312,7 @@ class RequesterPayload:
             For deterministic inference (same model + same input = same output),
             the requester can compute the expected result hash in advance.
             For non-deterministic inference, the requester and node must agree
-            on the expected output before the job starts — the hash is a commitment.
+            on the expected output before the job starts , the hash is a commitment.
         """
         # Serialise payload
         if isinstance(payload, (dict, list)):
@@ -335,20 +335,20 @@ class RequesterPayload:
         if expected_result is not None:
             result_hash = hash_result(expected_result)
         else:
-            # Placeholder — requester and node must agree out-of-band
+            # Placeholder , requester and node must agree out-of-band
             # In practice, for deterministic inference, run the model locally first
             log.warning(
-                "No expected_result provided — result_hash is placeholder. "
+                "No expected_result provided , result_hash is placeholder. "
                 "Requester and node must agree on expected output before job creation."
             )
             result_hash = "a" * 64  # placeholder
 
-        log.info("Job prepared — CID: %s  result_hash: %s...", cid, result_hash[:16])
+        log.info("Job prepared , CID: %s  result_hash: %s...", cid, result_hash[:16])
         return cid, result_hash
 
 
 # ---------------------------------------------------------------------------
-# Node — retrieve and process
+# Node , retrieve and process
 # ---------------------------------------------------------------------------
 
 class NodePayload:
@@ -378,13 +378,13 @@ class NodePayload:
         Retrieve encrypted payload from Beam IPFS and decrypt.
         Returns raw payload bytes.
         """
-        log.info("Retrieving payload from Beam IPFS — CID: %s", cid)
+        log.info("Retrieving payload from Beam IPFS , CID: %s", cid)
         encrypted = ipfs_get(self.api_url, cid)
 
         log.info("Decrypting payload (%d bytes)", len(encrypted))
         raw = rsa_decrypt(encrypted, self._private_key_pem)
 
-        log.info("Payload decrypted — %d bytes", len(raw))
+        log.info("Payload decrypted , %d bytes", len(raw))
         return raw
 
     def retrieve_and_decrypt_json(self, cid: str) -> Any:
@@ -413,7 +413,7 @@ def save_node_keypair(private_key_path: str = "~/.idios/node_rsa_key.pem",
     private_path.parent.mkdir(parents=True, exist_ok=True)
 
     if private_path.exists():
-        log.warning("Private key already exists at %s — not overwriting", private_path)
+        log.warning("Private key already exists at %s , not overwriting", private_path)
         return
 
     private_pem, public_pem = generate_rsa_keypair()
@@ -435,7 +435,7 @@ def load_private_key_pem(path: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# CLI — key generation
+# CLI , key generation
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
