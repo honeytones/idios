@@ -128,10 +128,14 @@ void On_user_refund(const ContractID& cid)
 {
     Idios::Refund args;
     Env::Memset(&args, 0, sizeof(args));
-
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    // Derive requester public key
+    uint64_t payment = 0, collateral = 0;
+    uint32_t asset_id = 0;
+    Env::DocGetNum64("payment",    &payment);
+    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum32("asset_id",   &asset_id);
+
     struct RequesterKeyID {
         ContractID m_Cid;
         uint8_t    m_Ctx = 0;
@@ -139,9 +143,14 @@ void On_user_refund(const ContractID& cid)
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
+    FundsChange fc[2];
+    fc[0].m_Amount = payment;    fc[0].m_Aid = asset_id; fc[0].m_Consume = 0;
+    fc[1].m_Amount = collateral; fc[1].m_Aid = asset_id; fc[1].m_Consume = 0;
+    uint32_t nFunds = (collateral > 0) ? 2 : 1;
+
     Env::GenerateKernel(&cid, Idios::Methods::Action_Refund,
         &args, sizeof(args),
-        nullptr, 0,
+        fc, nFunds,
         &sigKid, 1,
         "Idios: refund job", 0);
 }
