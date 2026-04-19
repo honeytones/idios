@@ -188,17 +188,13 @@ Share this with requesters so they can lock payment to your node:
 ### Prerequisites
 
 - Beam CLI wallet + wallet-api binary
-- `~/subnet-template` from [hypertensor-blockchain/subnet-template](https://github.com/hypertensor-blockchain/petals_tensor)
-- Python 3.10+ with `pip install requests substrate-interface tenacity websocket-client`
+- [hypertensor-blockchain/subnet-template](https://github.com/hypertensor-blockchain/petals_tensor)
+- Python 3.10+ with `pip install -r requirements.txt`
 
 ### Start Beam wallet-api
 
 ```bash
-./wallet-api \
-  --node_addr=eu-node01.mainnet.beam.mw:8100 \
-
-
-  --enable_assets
+./wallet-api --enable_assets &
 ```
 
 
