@@ -154,7 +154,7 @@ def beam_create_job(job_id: int, subnet_id: int, node_pk: str, result_hash: str,
 def beam_view_job(job_id: int) -> dict:
     """View job state using beam-wallet CLI , wallet-api invoke_contract cannot read contract vars."""
     import subprocess, json as _json
-    beam_cli = os.getenv("BEAM_CLI_PATH", "beam-wallet")
+    beam_cli = os.getenv("BEAM_CLI_PATH", os.path.expanduser("~/beam-wallet/beam-wallet"))
     args_str = (
         f"role=user,action=view_job,"
         f"cid={IDIOS_CID},"
@@ -169,7 +169,7 @@ def beam_view_job(job_id: int) -> dict:
         f"--node_addr={BEAM_NODE_ADDR}",
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=os.path.dirname(beam_cli))
         output = result.stdout + result.stderr
         for line in output.splitlines():
             if "Shader output:" in line:
