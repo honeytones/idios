@@ -112,7 +112,6 @@ idios_consensus.py     V1 direct hook into Hypertensor consensus loop
 hypertensor_trigger.py Hypertensor consensus to Beam settlement trigger
 idios_job.py           Complete job flow script
 idios_payload.py       IPFS payload delivery
-beam_settle.py         Beam Wallet API helpers
 ```
 
 ---
