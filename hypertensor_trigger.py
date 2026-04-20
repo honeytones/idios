@@ -54,7 +54,7 @@ import requests
 
 HYPERTENSOR_RPC_URL   = os.getenv("HYPERTENSOR_RPC_URL",  "ws://127.0.0.1:9944")
 BEAM_WALLET_API_URL   = os.getenv("BEAM_WALLET_API_URL",  "http://127.0.0.1:10000/api/wallet")
-IDIOS_WASM_PATH       = os.getenv("IDIOS_WASM_PATH",      "idios_app.wasm")
+IDIOS_WASM_PATH       = os.getenv("IDIOS_WASM_PATH",      os.path.join(os.path.dirname(os.path.abspath(__file__)), "idios_app.wasm"))
 IDIOS_CID             = os.getenv("IDIOS_CID",
     "e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d")
 
