@@ -223,7 +223,10 @@ result_hash=<RESULT_HASH_HEX>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
+> Set `epoch` to the current Hypertensor epoch. For testing, epoch=1 is fine. When running against a live node, use the current epoch.
 ### Commit (node)
+
+> Both wallets must be running when sending BEAM. The requester wallet should be active when the node commits collateral.
 
 ```bash
 ./beam-wallet shader \
