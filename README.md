@@ -128,6 +128,13 @@ This guide walks through setting up Idios from scratch on Ubuntu/Linux.
 - Git
 - A small amount of BEAM for transaction fees
 
+Install system dependencies:
+
+```bash
+sudo apt update
+sudo apt install git python3-venv python3-pip
+```
+
 ### 1. Clone Idios
 
     git clone https://github.com/honeytones/idios.git
