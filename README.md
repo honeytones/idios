@@ -73,7 +73,7 @@ The two approaches work together. Result hash handles job-level verification for
 
 **In progress:**
 
-- End-to-end test with live Hypertensor node (pending mainnet launch)
+- End-to-end confirmed with local Hypertensor node. Full mainnet test pending mainnet launch
 - Hypertensor DHT custom field , nodes broadcast Beam pubkeys in heartbeat
 
 ---
