@@ -86,6 +86,7 @@ class JobParams:
     payment:     int    # Groth (0.1 BEAM = 10_000_000)
     collateral:  int
     asset_id:    int = 0
+    node_id:     int = 0  # subnet_node_id of the hired node
 
 @dataclass
 class EpochResult:
@@ -242,7 +243,7 @@ def get_epoch_result(ht, subnet_id: int, epoch: int) -> Optional[EpochResult]:
         return None
 
 
-def get_epoch_result_from_consensus_data(ht, subnet_id: int, epoch: int) -> Optional[EpochResult]:
+def get_epoch_result_from_consensus_data(ht, subnet_id: int, epoch: int, node_id: int = 0) -> Optional[EpochResult]:
     """
     Fallback: derive attestation % from ConsensusData.attests.
     Used when RewardResult event isn't available (e.g. very fresh epoch close).
@@ -258,6 +259,28 @@ def get_epoch_result_from_consensus_data(ht, subnet_id: int, epoch: int) -> Opti
             log.debug("No consensus data for subnet %d epoch %d", subnet_id, epoch)
             return None
 
+        # Try reading individual node score first
+        if node_id > 0 and consensus.data:
+            node_score = None
+            for node_data in consensus.data:
+                if node_data.subnet_node_id == node_id:
+                    node_score = node_data.score
+                    break
+            if node_score is not None:
+                score_pct = int(node_score / 1e18 * 100)
+                passed = score_pct >= ATTESTATION_THRESHOLD
+                log.info(
+                    'Node score , subnet=%d epoch=%d node_id=%d score=%d (%d%%) -> %s',
+                    subnet_id, epoch, node_id, node_score, score_pct,
+                    'PASSED' if passed else 'FAILED'
+                )
+                return EpochResult(epoch=epoch, passed=passed, attestation_pct=score_pct)
+            else:
+                log.warning(
+                    'Node %d not found in consensus data for subnet %d epoch %d - falling back to attestation',
+                    node_id, subnet_id, epoch
+                )
+        # Fallback: derive attestation % from attests
         attest_count = len(consensus.attests)
 
         # Get validator count for this epoch
@@ -445,7 +468,7 @@ def run_trigger(job: JobParams, mnemonic: str, target_epoch: Optional[int] = Non
 
     if result is None:
         log.info("RewardResult event not found, trying ConsensusData fallback...")
-        result = get_epoch_result_from_consensus_data(ht, job.subnet_id, epoch)
+        result = get_epoch_result_from_consensus_data(ht, job.subnet_id, epoch, node_id=job.node_id)
 
     if result is None:
         log.error(
@@ -515,6 +538,8 @@ Env vars (alternative to CLI flags):
     p.add_argument("--collateral",  type=int, required=True)
     p.add_argument("--asset_id",    type=int, default=0, help="0=BEAM, 47=Nephrite")
     p.add_argument("--epoch",       type=int, default=None,
+    p.add_argument("--node_id",     type=int, default=0,
+                   help="subnet_node_id of the hired node")
                    help="Specific epoch to watch (default: current epoch)")
     p.add_argument("--mnemonic",    type=str,
                    default=MIDDLEWARE_MNEMONIC,
@@ -531,6 +556,7 @@ Env vars (alternative to CLI flags):
         job_id=args.job_id, subnet_id=args.subnet_id,
         result_hash=args.result_hash, payment=args.payment,
         collateral=args.collateral, asset_id=args.asset_id,
+        node_id=args.node_id,
     )
 
     if args.beam_test:
