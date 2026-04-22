@@ -538,9 +538,9 @@ Env vars (alternative to CLI flags):
     p.add_argument("--collateral",  type=int, required=True)
     p.add_argument("--asset_id",    type=int, default=0, help="0=BEAM, 47=Nephrite")
     p.add_argument("--epoch",       type=int, default=None,
+                   help="Specific epoch to watch (default: current epoch)")
     p.add_argument("--node_id",     type=int, default=0,
                    help="subnet_node_id of the hired node")
-                   help="Specific epoch to watch (default: current epoch)")
     p.add_argument("--mnemonic",    type=str,
                    default=MIDDLEWARE_MNEMONIC,
                    help="Middleware wallet mnemonic (or set MIDDLEWARE_MNEMONIC env var)")
