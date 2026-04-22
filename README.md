@@ -30,7 +30,7 @@ Requester                 Middleware               Node
     │                         │                     │
     │              ┌──────────┤◄── inference ───────┤
     │              │ Hypertensor epoch fires          │
-    │              │ 66% attestation reached          │
+    │              │ individual node score read        │
     │              └──────────►                      │
     │                         │                     │
     │                         ├─── settle ──────────► Beam contract
@@ -48,16 +48,17 @@ Requester                 Middleware               Node
 1. Requester calls `create` - locks payment, specifies node pubkey and result hash
 2. Node calls `commit` - locks collateral, job goes Active
 3. Hypertensor epoch closes - middleware detects `RewardResult` event
-4. ≥66% attestation → middleware calls `settle` → payment releases privately to node
-5. <66% attestation → middleware calls `slash` → collateral burned, requester refunded
+4. Epoch closes → middleware reads individual node score from chain
+5. Score above threshold → middleware calls `settle` → payment releases privately to node
+6. Score below threshold → middleware calls `slash` → collateral burned, requester refunded
 
 **Two settlement triggers:**
 
 For deterministic tasks, the result hash is the verification mechanism. The requester commits a hash of the expected output at job creation. The node produces the output, submits the matching hash, and the contract releases payment if they match. No epoch trigger needed.
 
-For open-ended tasks where there is no single correct answer - ranking model outputs, scoring inference quality, evaluating creative work - the 66% epoch attestation becomes the source of truth for job quality. Validator consensus determines whether the work was good enough.
+For open-ended tasks where there is no single correct answer, the individual node score agreed by validators that epoch is the source of truth. After an epoch closes, the validator network has reached consensus on a score for every node. That agreed score is the payment trigger — high score releases payment, low score slashes collateral.
 
-The two approaches work together. Result hash handles job-level verification for deterministic tasks. Epoch attestation handles quality judgement for open-ended ones.
+The two approaches work together. Result hash handles job-level verification for deterministic tasks. Individual node score handles quality judgement for open-ended ones.
 
 ---
 
@@ -66,7 +67,7 @@ The two approaches work together. Result hash handles job-level verification for
 **Confirmed working on Beam mainnet** ✅
 
 - Custom Contract Shader deployed (job create/commit/settle/slash/refund)
-- Full job lifecycle tested end-to-end on mainnet (Job 1 settled at height ~3813939)
+- Full job lifecycle tested end-to-end on mainnet across multiple jobs — create, commit, settle, slash, and refund all confirmed
 - Two-wallet flow proven: requester locks, node commits, middleware settles
 - Python middleware wired to Beam Wallet API (invoke_contract + process_invoke_data)
 - Hypertensor consensus trigger built, using subnet-template's `Hypertensor` class directly
@@ -299,7 +300,7 @@ Private settlement expands the addressable market for Hypertensor subnets - ente
 
 **Key derivation.** The middleware key is derived from the contract ID with a different context byte than user/node keys, so it can never be confused with a user key. Both use `Env::DerivePk` in the App Shader and `Env::AddSig` in the Contract Shader - native Beam multisig, not custom signatures.
 
-**Why `attest_data` isn't used for hash verification.** Hypertensor documents `attest_data` as "not used on-chain anywhere" - it's exchanged peer-to-peer between validators. Result hash verification is therefore the subnet's responsibility before calling the trigger. The trigger's only question to Hypertensor is: did this epoch pass 66% attestation?
+**Why individual node score is the correct trigger.** Subnet attestation tells you whether enough validators agreed on the epoch as a whole — it says nothing about any individual node's performance on a specific job. The correct trigger is the individual node score stored on chain after each epoch closes. That score represents what the validator network agreed this specific node delivered. The middleware reads that score and uses it as the settlement trigger.
 
 **Settle/slash args are explicit.** `VarReader::Read_T` in the App Shader transaction context doesn't reliably find contract vars. Payment, collateral, and asset_id are passed explicitly and validated by the contract.
 
@@ -319,6 +320,5 @@ Private settlement expands the addressable market for Hypertensor subnets - ente
 
 ## Contributing
 
-Idios is early and moving fast. If you're building on Hypertensor or Beam and want to integrate, open an issue or reach out directly.
 
-Built by the community, for the community.
+If you're building on Hypertensor or Beam and want to integrate, open an issue or reach out directly.
