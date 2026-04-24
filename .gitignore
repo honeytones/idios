@@ -6,3 +6,12 @@ __pycache__/
 logs/
 
 !idios_app.wasm
+
+# Local session files — never commit
+Idios_Session_Resume_*.md
+Idios_Claude_Rules_*.md
+Idios_Dapp_Debug_Notes*.md
+CLAUDE.md
+beam-wallet.cfg
+*.dapp
+*.bak
