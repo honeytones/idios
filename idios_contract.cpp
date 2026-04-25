@@ -105,9 +105,7 @@ BEAM_EXPORT void Method_4(const Idios::Settle& args) {
     Env::Halt_if(!LoadParams(params));
     Env::AddSig(params.middleware_pk);
 
-    Env::FundsUnlock(job.asset_id, job.payment);
-    if (job.collateral > 0)
-        Env::FundsUnlock(job.asset_id, job.collateral);
+    Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
 
     job.status = Idios::JobStatus::Settled;
     SaveJob(job);
@@ -122,9 +120,7 @@ BEAM_EXPORT void Method_5(const Idios::Slash& args) {
     Env::Halt_if(!LoadParams(params));
     Env::AddSig(params.middleware_pk);
 
-    Env::FundsUnlock(job.asset_id, job.payment);
-    if (job.collateral > 0)
-        Env::FundsUnlock(job.asset_id, job.collateral);
+    Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
 
     job.status = Idios::JobStatus::Slashed;
     SaveJob(job);
@@ -139,10 +135,7 @@ BEAM_EXPORT void Method_6(const Idios::Refund& args) {
     Env::Halt_if(Env::get_Height() <= job.expiry_block);
 
     Env::AddSig(job.requester_pk);
-    Env::FundsUnlock(job.asset_id, job.payment);
-
-    if (job.status == Idios::JobStatus::Active && job.collateral > 0)
-        Env::FundsUnlock(job.asset_id, job.collateral);
+    Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
 
     job.status = Idios::JobStatus::Refunded;
     SaveJob(job);

@@ -47,9 +47,16 @@ void On_manager_deploy(const ContractID& unused)
         nullptr, 0, nullptr, 0, "Deploy Idios contract", 0);
 }
 
-void On_manager_view(const ContractID& unused)
+void On_manager_view(const ContractID& cid)
 {
-    On_error("view not implemented");
+    struct KeyParams { uint8_t prefix = 'P'; };
+    Idios::Params params;
+    Env::Key_T<KeyParams> key;
+    key.m_Prefix.m_Cid = cid;
+    if (!Env::VarReader::Read_T(key, params))
+        return On_error("params not found");
+    Env::DocGroup gr("params");
+    Env::DocAddBlob_T("middleware_pk", params.middleware_pk);
 }
 
 // ----------------------------------------------------------------
@@ -143,14 +150,15 @@ void On_user_refund(const ContractID& cid)
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    FundsChange fc[2];
-    fc[0].m_Amount = payment;    fc[0].m_Aid = asset_id; fc[0].m_Consume = 0;
-    fc[1].m_Amount = collateral; fc[1].m_Aid = asset_id; fc[1].m_Consume = 0;
-    uint32_t nFunds = (collateral > 0) ? 2 : 1;
+    FundsChange fc;
+    fc.m_Amount = payment + collateral;
+    fc.m_Aid = asset_id;
+    fc.m_Consume = 0;
+    uint32_t nFunds = 1;
 
     Env::GenerateKernel(&cid, Idios::Methods::Action_Refund,
         &args, sizeof(args),
-        fc, nFunds,
+        &fc, nFunds,
         &sigKid, 1,
         "Idios: refund job", 0);
 }
@@ -171,15 +179,15 @@ void On_middleware_settle(const ContractID& cid)
     Env::DocGetNum64("payment", &payment);
     Env::DocGetNum64("collateral", &collateral);
     Env::DocGetNum32("asset_id", &asset_id);
-    struct MiddlewareKeyID { uint8_t m_Tag; uint8_t m_Ctx; } kid;
-    kid.m_Tag = 'M'; kid.m_Ctx = 1;
+    struct MiddlewareKeyID { uint8_t m_Tag = 'M'; uint8_t m_Ctx = 1; } kid;
     Env::KeyID sigKid(&kid, sizeof(kid));
-    FundsChange fc[2];
-    fc[0].m_Amount = payment; fc[0].m_Aid = asset_id; fc[0].m_Consume = 0;
-    fc[1].m_Amount = collateral; fc[1].m_Aid = asset_id; fc[1].m_Consume = 0;
-    uint32_t nFunds = (collateral > 0) ? 2 : 1;
+    FundsChange fc;
+    fc.m_Amount = payment + collateral;
+    fc.m_Aid = asset_id;
+    fc.m_Consume = 0;
+    uint32_t nFunds = 1;
     Env::GenerateKernel(&cid, Idios::Methods::Action_Settle,
-        &args, sizeof(args), fc, nFunds, &sigKid, 1, "Idios: settle job", 0);
+        &args, sizeof(args), &fc, nFunds, &sigKid, 1, "Idios: settle job", 0);
 }
 void On_middleware_slash(const ContractID& cid)
 {
@@ -191,15 +199,15 @@ void On_middleware_slash(const ContractID& cid)
     Env::DocGetNum64("payment", &payment);
     Env::DocGetNum64("collateral", &collateral);
     Env::DocGetNum32("asset_id", &asset_id);
-    struct MiddlewareKeyID { uint8_t m_Tag; uint8_t m_Ctx; } kid;
-    kid.m_Tag = 'M'; kid.m_Ctx = 1;
+    struct MiddlewareKeyID { uint8_t m_Tag = 'M'; uint8_t m_Ctx = 1; } kid;
     Env::KeyID sigKid(&kid, sizeof(kid));
-    FundsChange fc[2];
-    fc[0].m_Amount = payment; fc[0].m_Aid = asset_id; fc[0].m_Consume = 0;
-    fc[1].m_Amount = collateral; fc[1].m_Aid = asset_id; fc[1].m_Consume = 0;
-    uint32_t nFunds = (collateral > 0) ? 2 : 1;
+    FundsChange fc;
+    fc.m_Amount = payment + collateral;
+    fc.m_Aid = asset_id;
+    fc.m_Consume = 0;
+    uint32_t nFunds = 1;
     Env::GenerateKernel(&cid, Idios::Methods::Action_Slash,
-        &args, sizeof(args), fc, nFunds, &sigKid, 1, "Idios: slash job", 0);
+        &args, sizeof(args), &fc, nFunds, &sigKid, 1, "Idios: slash job", 0);
 }
 void On_user_get_key(const ContractID& cid)
 {
@@ -328,6 +336,7 @@ BEAM_EXPORT void Method_1()
 {
     const Actions_map_t MANAGER_ACTIONS = {
         {"deploy", On_manager_deploy},
+        {"create", On_manager_deploy},
         {"view",   On_manager_view},
     };
     const Actions_map_t USER_ACTIONS = {
