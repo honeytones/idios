@@ -76,8 +76,8 @@ Requester                 Middleware               Node
 Deployed on Beam mainnet:
 
 ```
-CID: e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d
-Deployed height: 3813751
+CID: 74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027
+Deployed height: 3832296
 ```
 
 **Actions:**
@@ -133,7 +133,7 @@ cd ~/beam-cli && ./wallet-api \
 cd ~/beam-cli && ./beam-wallet shader \
   --shader_app_file=/home/tones/idios/idios_app.wasm \
   --shader_args="role=user,action=create,\
-cid=e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d,\
+cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,\
 job_id=2,subnet_id=1,epoch=1,expiry_block=3900000,\
 payment=10000000,asset_id=0,\
 node_pk=<NODE_PUBKEY>,\
@@ -147,7 +147,7 @@ result_hash=<RESULT_HASH_HEX>" \
 cd ~/beam-cli2 && ./beam-wallet shader \
   --shader_app_file=/home/tones/idios/idios_app.wasm \
   --shader_args="role=user,action=commit,\
-cid=e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d,\
+cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,\
 job_id=2,collateral=5000000,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
