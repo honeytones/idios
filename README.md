@@ -31,7 +31,7 @@ Requester                 Middleware               Node
     │                         │                     │
     │              ┌──────────┤◄── inference ───────┤
     │              │ Hypertensor epoch fires          │
-    │              │ 66% attestation reached          │
+    │              │ individual node score read      │
     │              └──────────►                      │
     │                         │                     │
     │                         ├─── settle ──────────► Beam contract
@@ -49,8 +49,8 @@ Requester                 Middleware               Node
 1. Requester calls `create` — locks payment + specifies node pubkey and result hash
 2. Node calls `commit` — locks collateral, job goes Active
 3. Hypertensor epoch closes — middleware detects `RewardResult` event
-4. ≥66% attestation → middleware calls `settle` → payment releases privately to node
-5. <66% attestation → middleware calls `slash` → collateral burned, requester refunded
+4. Score above threshold → middleware calls `settle` → payment releases privately to node
+5. Score below threshold → middleware calls `slash` → collateral burned, requester refunded
 
 ---
 
@@ -212,7 +212,7 @@ Private settlement expands the addressable market for Hypertensor subnets — en
 
 **Key derivation.** The middleware key is derived from the contract ID with a different context byte than user/node keys, so it can never be confused with a user key. Both use `Env::DerivePk` in the App Shader and `Env::AddSig` in the Contract Shader — native Beam multisig, not custom signatures.
 
-**Why `attest_data` isn't used for hash verification.** Hypertensor documents `attest_data` as "not used on-chain anywhere" — it's exchanged peer-to-peer between validators. Result hash verification is therefore the subnet's responsibility before calling the trigger. The trigger's only question to Hypertensor is: did this epoch pass 66% attestation?
+**Why `attest_data` isn't used for hash verification.** Hypertensor documents `attest_data` as "not used on-chain anywhere" — it's exchanged peer-to-peer between validators. Result hash verification is therefore the subnet's responsibility before calling the trigger. The trigger's only question to Hypertensor is: what individual node score did this node receive this epoch?
 
 **Settle/slash args are explicit.** `VarReader::Read_T` in the App Shader transaction context doesn't reliably find contract vars. Payment, collateral, and asset_id are passed explicitly and validated by the contract.
 
