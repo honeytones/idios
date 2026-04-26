@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { styled } from '@linaria/react';
-import { createJob } from '@app/core/api';
+import { createJob, viewJob, refundJob } from '@app/core/api';
 
 const Container = styled.div`
   display: flex;
@@ -140,6 +140,51 @@ const SubmitButton = styled.button`
   }
 `;
 
+const SecondaryButton = styled.button`
+  padding: 10px 20px;
+  border-radius: 50px;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: transparent;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #00f6d2;
+    color: #00f6d2;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+`;
+
+const DangerButton = styled.button`
+  padding: 10px 20px;
+  border-radius: 50px;
+  border: 1px solid rgba(255,98,92,0.4);
+  background: rgba(255,98,92,0.1);
+  color: #ff625c;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 10px;
+
+  &:hover {
+    background: rgba(255,98,92,0.2);
+    border-color: #ff625c;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+`;
+
 const StatusMsg = styled.div<{ error?: boolean }>`
   margin-top: 16px;
   padding: 12px 16px;
@@ -149,6 +194,43 @@ const StatusMsg = styled.div<{ error?: boolean }>`
   color: ${({ error }) => error ? '#ff625c' : '#00f6d2'};
   text-align: center;
   width: 100%;
+`;
+
+const JobCard = styled.div`
+  width: 100%;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.03);
+  margin-top: 12px;
+`;
+
+const JobField = styled.div`
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: rgba(255,255,255,0.7);
+
+  span:last-child {
+    color: white;
+    font-weight: 500;
+    text-align: right;
+    max-width: 60%;
+    word-break: break-all;
+  }
+`;
+
+const ButtonRow = styled.div`
+  display: flex;
+  margin-top: 12px;
+`;
+
+const Divider = styled.div`
+  width: 100%;
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 8px 0 24px 0;
 `;
 
 const MainPage: React.FC = () => {
@@ -163,7 +245,17 @@ const MainPage: React.FC = () => {
   const [isError, setIsError] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // View/Refund state
+  const [viewJobId, setViewJobId] = useState('');
+  const [jobInfo, setJobInfo] = useState<any>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState('');
+  const [refundLoading, setRefundLoading] = useState(false);
+  const [refundStatus, setRefundStatus] = useState('');
+  const [refundError, setRefundError] = useState(false);
+
   const beamToGroth = (beam: string) => Math.round(parseFloat(beam) * 1e8);
+  const grothToBeam = (groth: number) => (groth / 1e8).toFixed(8).replace(/\.?0+$/, '');
   const usdEstimate = (beam: string) => beam ? `~$${(parseFloat(beam) * 0.02).toFixed(2)}` : '';
 
   const handlePaymentChange = (val: string) => {
@@ -208,8 +300,77 @@ const MainPage: React.FC = () => {
     }
   };
 
-  const isValid = jobId && nodePk && payment && expiryBlock && 
+  const handleViewJob = async () => {
+    if (!viewJobId) return;
+    setViewLoading(true);
+    setViewError('');
+    setJobInfo(null);
+    setRefundStatus('');
+
+    try {
+      const result = await viewJob(parseInt(viewJobId));
+      if (!result || (typeof result === 'object' && Object.keys(result).length === 0)) {
+        throw new Error('Job not found');
+      }
+      setJobInfo(result);
+    } catch (err: any) {
+      setViewError(err.message || 'Failed to load job');
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const handleRefund = async () => {
+    if (!viewJobId || !jobInfo) return;
+    setRefundLoading(true);
+    setRefundStatus('');
+    setRefundError(false);
+
+    try {
+      setRefundStatus('Refunding — please approve in your Beam wallet...');
+      await refundJob(
+        parseInt(viewJobId),
+        jobInfo.payment || 0,
+        jobInfo.collateral || 0,
+        jobInfo.asset_id || 0
+      );
+      setRefundStatus(`Job ${viewJobId} refund submitted successfully.`);
+      setJobInfo(null);
+    } catch (err: any) {
+      setRefundError(true);
+      setRefundStatus(err.message || 'Refund failed');
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
+  const isValid = jobId && nodePk && payment && expiryBlock &&
     (settlement === 'epoch' || resultHash);
+
+  const renderJobInfo = () => {
+    if (!jobInfo) return null;
+    const fields = Object.entries(jobInfo);
+    return (
+      <JobCard>
+        {fields.map(([key, val]) => (
+          <JobField key={key}>
+            <span>{key}</span>
+            <span>{typeof val === 'number' && key.toLowerCase().includes('payment') || key.toLowerCase().includes('collateral')
+              ? `${grothToBeam(val as number)} BEAM`
+              : String(val)}</span>
+          </JobField>
+        ))}
+        <ButtonRow>
+          <DangerButton onClick={handleRefund} disabled={refundLoading}>
+            {refundLoading ? 'Refunding...' : '↩ Refund Job'}
+          </DangerButton>
+        </ButtonRow>
+        {refundStatus && (
+          <StatusMsg error={refundError} style={{ marginTop: '12px' }}>{refundStatus}</StatusMsg>
+        )}
+      </JobCard>
+    );
+  };
 
   return (
     <Container>
@@ -265,6 +426,30 @@ const MainPage: React.FC = () => {
       </SubmitButton>
 
       {status && <StatusMsg error={isError}>{status}</StatusMsg>}
+
+      <Divider />
+
+      <Section>
+        <SectionTitle>View / Refund Job</SectionTitle>
+        <Row>
+          <div>
+            <Label>Job ID</Label>
+            <Input
+              placeholder="e.g. 111"
+              value={viewJobId}
+              onChange={e => { setViewJobId(e.target.value); setJobInfo(null); setViewError(''); }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '12px' }}>
+            <SecondaryButton onClick={handleViewJob} disabled={!viewJobId || viewLoading}>
+              {viewLoading ? 'Loading...' : '🔍 View Job'}
+            </SecondaryButton>
+          </div>
+        </Row>
+        {viewError && <StatusMsg error>{viewError}</StatusMsg>}
+        {renderJobInfo()}
+      </Section>
+
     </Container>
   );
 };

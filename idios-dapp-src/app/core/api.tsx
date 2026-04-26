@@ -1,6 +1,6 @@
 import Utils from '@core/utils.js';
 
-const CID = 'e595078e08f00f471e7781b8e64f1d1303fa61b838f881dd646ec5f701d9251d';
+const CID = '74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027';
 const SHADER_URL = './contract.wasm';
 
 let shader = null;
@@ -36,28 +36,38 @@ export async function commitJob(job_id, collateral) {
             if (err) return reject(err);
             onMakeTx(err, result, full);
             resolve(result);
-        }, null);
+        }, shader);
     });
 }
 
 export async function viewJob(job_id) {
+    await loadShader();
     return new Promise((resolve, reject) => {
         const args = `role=user,action=view_job,cid=${CID},job_id=${job_id}`;
         Utils.invokeContract(args, (err, result, full) => {
-            if (err) return reject(err);
+            try {
+                const raw = full && full.result && full.result.output;
+                if (raw) {
+                    const parsed = JSON.parse('{' + raw + '}');
+                    return resolve(parsed.job || parsed);
+                }
+            } catch(e) {}
+            if (err) return reject(new Error(JSON.stringify(err)));
             resolve(result);
-        }, null);
+        }, shader);
     });
 }
 
-export async function refundJob(job_id) {
+export async function refundJob(job_id, payment, collateral, asset_id = 0) {
+    await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=refund,cid=${CID},job_id=${job_id}`;
+        const args = `role=user,action=refund,cid=${CID},job_id=${job_id},payment=${payment},collateral=${collateral},asset_id=${asset_id}`;
         Utils.invokeContract(args, (err, result, full) => {
+            console.log('refundJob response - err:', JSON.stringify(err), 'result:', JSON.stringify(result), 'full:', JSON.stringify(full));
             if (err) return reject(err);
             onMakeTx(err, result, full);
             resolve(result);
-        }, null);
+        }, shader);
     });
 }
 

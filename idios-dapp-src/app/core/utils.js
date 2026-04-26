@@ -265,7 +265,7 @@ export default class Utils {
                 })
             }
 
-            if (typeof answer.result.output == "string" && answer.result.output !== "") {
+            if (typeof answer.result.output == "string" && answer.result.output !== "" && answer.result.output.startsWith("{")) {
                 // this is shader result
                 let shaderAnswer = JSON.parse(answer.result.output)
                 if (shaderAnswer.error) {
