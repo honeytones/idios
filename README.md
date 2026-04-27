@@ -125,7 +125,7 @@ cd ~/beam-cli && ./wallet-api \
   --enable_assets
 ```
 
-⚠️ Always restart wallet-api after rebuilding `idios_app.wasm` — it caches the wasm per connection.
+⚠️ Always restart wallet-api after rebuilding `idios_app.wasm` it caches the wasm per connection.
 
 ### Create a job (requester)
 
@@ -210,7 +210,7 @@ Private settlement expands the addressable market for Hypertensor subnets enterp
 
 **No bridge, no cross-chain protocol.** Beam and Hypertensor never communicate. The middleware is the only connection a lightweight Python process running alongside the node operator's existing stack.
 
-**Key derivation.** The middleware key is derived from the contract ID with a different context byte than user/node keys, so it can never be confused with a user key. Both use `Env::DerivePk` in the App Shader and `Env::AddSig` in the Contract Shader — native Beam multisig, not custom signatures.
+**Key derivation.** The middleware key is derived from the contract ID with a different context byte than user/node keys, so it can never be confused with a user key. Both use `Env::DerivePk` in the App Shader and `Env::AddSig` in the Contract Shader native Beam multisig, not custom signatures.
 
 **Why `attest_data` isn't used for hash verification.** Hypertensor documents `attest_data` as "not used on-chain anywhere" it's exchanged peer-to-peer between validators. Result hash verification is therefore the subnet's responsibility before calling the trigger. The trigger's only question to Hypertensor is: what individual node score did this node receive this epoch?
 
