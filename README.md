@@ -41,14 +41,14 @@ Requester                 Middleware               Node
 **Three components:**
 
 - **Hypertensor** AI work, consensus, node scoring
-- **Idios middleware** — connects both systems (this repo)
-- **Beam MimbleWimble** — private escrow, payment release, slashing
+- **Idios middleware** connects both systems (this repo)
+- **Beam MimbleWimble** private escrow, payment release, slashing
 
 **Job lifecycle:**
 
-1. Requester calls `create` — locks payment + specifies node pubkey and result hash
-2. Node calls `commit` — locks collateral, job goes Active
-3. Hypertensor epoch closes — middleware detects `RewardResult` event
+1. Requester calls `create` locks payment + specifies node pubkey and result hash
+2. Node calls `commit` locks collateral, job goes Active
+3. Hypertensor epoch closes middleware detects `RewardResult` event
 4. Score above threshold → middleware calls `settle` → payment releases privately to node
 5. Score below threshold → middleware calls `slash` → collateral burned, requester refunded
 
