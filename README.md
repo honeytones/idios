@@ -58,16 +58,19 @@ Requester                 Middleware               Node
 
 **Confirmed working on Beam mainnet** ✅
 
-- Custom Contract Shader deployed (job create/commit/settle/slash/refund)
-- Full job lifecycle tested end-to-end on mainnet (Job 1 settled at height ~3813939)
-- Two-wallet flow proven: requester locks, node commits, middleware settles
+- Custom Contract Shader deployed (job create / commit / settle / slash / refund)
+- Full job lifecycle tested end to end on mainnet across multiple jobs
+- Two wallet flow proven: requester locks, node commits, middleware settles
 - Python middleware wired to Beam Wallet API (invoke_contract + process_invoke_data)
-- Hypertensor consensus trigger built, using subnet-template's `Hypertensor` class directly
+- Dapp UI for end users (create / view / refund) validated against the live contract
 
-**In progress:**
+**Working today:**
 
-- End-to-end test with live Hypertensor node (pending mainnet launch)
-- Hypertensor DHT custom field — nodes broadcast Beam pubkeys in heartbeat
+- **Fast Settlement (deterministic).** The requester commits a result hash at job creation. The node delivers matching output and middleware triggers settle. This path uses only the Beam contract and is fully validated on mainnet.
+
+**In design:**
+
+- **Epoch Settlement (open ended tasks).** A consensus mechanism among middleware operators that decides settle or slash for jobs without a predetermined result hash. Per Hypertensor team guidance, the path is to build this with multiple peers first, then integrate as a Hypertensor subnet later. Currently a single operator middleware exists but multi operator consensus is not yet built.
 
 ---
 
@@ -212,7 +215,7 @@ Private settlement expands the addressable market for Hypertensor subnets enterp
 
 **Key derivation.** The middleware key is derived from the contract ID with a different context byte than user/node keys, so it can never be confused with a user key. Both use `Env::DerivePk` in the App Shader and `Env::AddSig` in the Contract Shader native Beam multisig, not custom signatures.
 
-**Why `attest_data` isn't used for hash verification.** Hypertensor documents `attest_data` as "not used on-chain anywhere" it's exchanged peer-to-peer between validators. Result hash verification is therefore the subnet's responsibility before calling the trigger. The trigger's only question to Hypertensor is: what individual node score did this node receive this epoch?
+**Settlement trigger design is open.** The Beam contract itself enforces the rules (escrow, expiry, multi sig). What triggers settle or slash for open ended jobs is a consensus problem that lives outside the contract. The current single operator middleware works for deterministic jobs via result hash matching. For non deterministic jobs, the design path is to build a multi operator middleware that reaches agreement among peers first, then integrate that mechanism as a Hypertensor subnet once the network is live.
 
 **Settle/slash args are explicit.** `VarReader::Read_T` in the App Shader transaction context doesn't reliably find contract vars. Payment, collateral, and asset_id are passed explicitly and validated by the contract.
 
