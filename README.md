@@ -1,8 +1,8 @@
 # Idios
 
-**Private settlement layer for decentralised AI networks.**
+**Private escrow and settlement layer for AI compute on Beam.**
 
-Idios connects [Hypertensor](https://hypertensor.org) AI inference with [Beam MimbleWimble](https://beam.mw) private payments. When a Hypertensor subnet reaches consensus on a completed job, Idios automatically releases payment to the node or slashes collateral if consensus fails with no public record of amounts or identities on either chain.
+Pay for AI work privately. Verifiable delivery, escrowed payment, no public record of amounts or identities.
 
 > "Run AI on sensitive data privately, verifiably, without trusting any single party."
 
@@ -10,11 +10,29 @@ Idios connects [Hypertensor](https://hypertensor.org) AI inference with [Beam Mi
 
 ## Why
 
-Hypertensor's settlement layer is public. Anyone can see which wallets paid for AI work, which nodes were rewarded, and how much changed hands. For enterprise clients and anyone running inference on sensitive data, that's a dealbreaker regardless of how capable the AI layer is.
+Public payment rails leak everything. Who hires whom, what they pay, how often. For anyone running sensitive work or operating in regulated industries, that visibility is a dealbreaker regardless of how capable the underlying AI is.
 
+Idios solves the payment and settlement privacy problem. Payment is locked in private escrow on [Beam](https://beam.mw). The node providing the work locks collateral as a performance bond. Verification happens independently of any public chain. None of it appears on a public ledger.
 
+---
 
-Idios is the community answer specifically for settlement and payment privacy, which is achievable today without waiting for inference privacy to mature.
+## How verification works
+
+Verification is what makes the escrow trustworthy. Without it, settle and slash decisions would rest on a single party.
+
+The path forward is a multi operator network. Operators run Beam nodes and automated verification scripts. Each operator independently checks whether the work was delivered correctly. Settlement requires multiple operators to agree, enforced by Beam multi signature at the contract level.
+
+For deterministic work where the correct output is known in advance, verification is automatic. Operators compare hashes and sign the result. For non deterministic work, verification design is open and depends on the use case.
+
+---
+
+## Where this is going
+
+The longer term goal is for Idios to operate as a [Hypertensor](https://hypertensor.org) subnet, so that anyone can run an Idios operator node and earn rewards through standard subnet economics. This decentralises verification fully and aligns operator incentives with network quality.
+
+That requires Hypertensor mainnet to be live, which is its own timeline. Following guidance from the Hypertensor team, the multi operator network is being built standalone first, with subnet integration as a later phase. The escrow contract on Beam works independently of Hypertensor and operates today.
+
+Operator economics for the standalone phase are still being worked out. The basic structure is fees per settled job paid to participating operators. Real numbers will come from running the network with a small group of operators and observing what works.
 
 ---
 
