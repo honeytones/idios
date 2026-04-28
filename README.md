@@ -120,11 +120,18 @@ Deployed height: 3832296
 
 ```
 idios_contract.h       Contract Shader header (job struct, method IDs)
-idios_contract.cpp     Contract Shader (on-chain logic — escrow, settle, slash)
+idios_contract.cpp     Contract Shader (on-chain logic, escrow, settle, slash)
 idios_app.cpp          App Shader (wallet-side transaction builder)
-beam_settle.py         Beam Wallet API helpers
-hypertensor_trigger.py Hypertensor consensus → Beam settlement trigger
+idios_payload.py       IPFS payload delivery (encrypted job specs via Beam private IPFS)
+idios_job.py           Requester end-to-end script (early prototype, watch/settle logic
+                       uses pre-multi-operator architecture)
+idios_consensus.py     Hypertensor consensus integration (early prototype,
+                       pre-multi-operator architecture)
+hypertensor_trigger.py Standalone Hypertensor trigger script (early prototype,
+                       pre-multi-operator architecture)
 ```
+
+The three scripts marked early prototype reflect the original Hypertensor consensus integration design. They are kept in the repo as reference but are not part of the current multi operator middleware path. See [Where this is going](#where-this-is-going) for the current architecture.
 
 ---
 
