@@ -38,37 +38,42 @@ Operator economics for the standalone phase are still being worked out. The basi
 
 ## How it works
 
-Beam and Hypertensor never communicate directly. Python middleware running on the node operator's machine talks to both via HTTP/WebSocket.
+Idios runs entirely on Beam. The contract handles escrow, payment, and slashing. A small group of independent operator scripts handle verification and trigger settlement decisions. Hypertensor integration is a future phase.
 
 ```
-Requester                 Middleware               Node
+Requester                Operators              Node
     │                         │                     │
     ├─── create job ──────────►│                     │
     │    (locks BEAM escrow)   │                     │
-    │                         ├─── job via SBBS ────►│
     │                         │                     │
-    │              ┌──────────┤◄── inference ───────┤
-    │              │ Hypertensor epoch fires          │
-    │              │ individual node score read      │
-    │              └──────────►                      │
+    │                         │  job spec via SBBS  │
+    │  ─────────────────────────────────────────────►│
+    │                         │                     │
+    │                         │       inference     │
+    │                         │  ◄──────────────────┤
+    │                         │                     │
+    │                         │ verify + sign       │
+    │                         │ M of N attestations │
     │                         │                     │
     │                         ├─── settle ──────────► Beam contract
-    │                         │    (payment releases privately)
+    │                              (payment releases privately)
 ```
 
 **Three components:**
 
-- **Hypertensor** AI work, consensus, node scoring
-- **Idios middleware** connects both systems (this repo)
-- **Beam MimbleWimble** private escrow, payment release, slashing
+- **Beam contract** Private escrow, payment release, slashing, multi signature settlement
+- **Operator network** Independent verifiers running automated scripts, signing settle and slash decisions
+- **Hypertensor** Future integration as a subnet for permissionless operator participation and stake weighted consensus
 
 **Job lifecycle:**
 
-1. Requester calls `create` locks payment + specifies node pubkey and result hash
-2. Node calls `commit` locks collateral, job goes Active
-3. Hypertensor epoch closes middleware detects `RewardResult` event
-4. Score above threshold → middleware calls `settle` → payment releases privately to node
-5. Score below threshold → middleware calls `slash` → collateral burned, requester refunded
+1. Requester calls `create` and locks payment, specifies node pubkey and result hash
+2. Node calls `commit` and locks collateral, job moves to Active
+3. Requester sends the actual work specification to the node (via SBBS or out of band)
+4. Node performs the work and returns the result
+5. Operators verify the result independently (hash match for deterministic jobs)
+6. Once M of N operators agree, settle releases payment to the node, or slash burns collateral and refunds the requester
+7. If no operator agreement is reached before expiry, the requester can refund directly
 
 ---
 
