@@ -243,7 +243,7 @@ TENSOR and BEAM serve completely different functions and one strengthens the oth
 
 TENSOR governs Hypertensor staking, node scoring, emissions, subnet participation. None of that changes with Idios. Nodes still earn TENSOR emissions through Hypertensor consensus.
 
-What Idios adds is a separate private settlement layer for individual job payments. A requester deposits BEAM into escrow. When consensus confirms the job is done, that payment releases privately to the node. Two separate reward streams, neither cannibalising the other.
+What Idios adds is a separate private settlement layer for individual job payments. A requester deposits BEAM into escrow. When operators verify the work and reach agreement, payment releases privately to the node. Two separate reward streams, neither cannibalising the other.
 
 Private settlement expands the addressable market for Hypertensor subnets enterprise clients and regulated industries that can't use a subnet with public payment records become viable customers. More demand for subnet capacity means more demand for TENSOR staking.
 
