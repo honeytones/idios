@@ -128,90 +128,100 @@ hypertensor_trigger.py Hypertensor consensus → Beam settlement trigger
 
 ---
 
-## Running
+## Quick start (dapp UI)
+
+The simplest way to use Idios today is through the Beam Desktop wallet's dapp store.
+
+1. Install the Beam Desktop wallet for your platform from [beam.mw](https://beam.mw)
+2. Sync the wallet to mainnet and fund it with a small amount of BEAM for fees
+3. Install the Idios dapp from the wallet's DApp Store (or sideload the `.dapp` file)
+4. Open the Idios dapp from your installed apps
+
+From there you can create a job, view its state, and refund it after expiry. The dapp form covers all the fields needed: job ID, subnet ID, payment amount, expiry block, node public key, and the result hash for deterministic verification.
+
+> Note on expiry block: Beam mainnet produces a block roughly every 60 seconds. Set `expiry_block` to at least `current_block + 200` to give the create transaction time to confirm before expiry. For real jobs, `current_block + 1440` (~24 hours) is more typical.
+
+---
+
+## For developers and operators (CLI)
+
+The Beam CLI wallet can drive the contract directly without going through the dapp. This is useful for building middleware, scripting, or any role beyond the requester role exposed in the dapp.
 
 ### Prerequisites
 
-- Beam CLI wallet + wallet-api binary
-- `~/subnet-template` from [hypertensor-blockchain/subnet-template](https://github.com/hypertensor-blockchain/petals_tensor)
-- Python 3.10+ with `pip install requests substrate-interface tenacity websocket-client`
+- Beam CLI wallet binary, available from the [Beam releases page](https://github.com/BeamMW/beam/releases)
+- A copy of `idios_app.wasm` (downloadable from this repo or built from source)
+- A Beam mainnet node to connect to (run your own, or use a public node like `eu-node01.mainnet.beam.mw:8100`)
 
-### Start Beam wallet-api
+### View a job
 
 ```bash
-cd ~/beam-cli && ./wallet-api \
-  --node_addr=eu-node01.mainnet.beam.mw:8100 \
-  --use_http=1 --port=10000 \
-  --wallet_path=wallet.db --pass=YOUR_PASSWORD \
-  --enable_assets
+./beam-wallet shader \
+  --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=view_job,cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,job_id=<N>" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
-
-⚠️ Always restart wallet-api after rebuilding `idios_app.wasm` it caches the wasm per connection.
 
 ### Create a job (requester)
 
 ```bash
-cd ~/beam-cli && ./beam-wallet shader \
-  --shader_app_file=/home/tones/idios/idios_app.wasm \
-  --shader_args="role=user,action=create,\
-cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,\
-job_id=2,subnet_id=1,epoch=1,expiry_block=3900000,\
-payment=10000000,asset_id=0,\
-node_pk=<NODE_PUBKEY>,\
-result_hash=<RESULT_HASH_HEX>" \
+./beam-wallet shader \
+  --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=create,cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE_BLOCK>,payment=<GROTH>,asset_id=0,node_pk=<NODE_PUBKEY>,result_hash=<HASH_HEX>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-### Commit (node)
+Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` is 0.05 BEAM.
+
+### Commit collateral (node)
 
 ```bash
-cd ~/beam-cli2 && ./beam-wallet shader \
-  --shader_app_file=/home/tones/idios/idios_app.wasm \
-  --shader_args="role=user,action=commit,\
-cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,\
-job_id=2,collateral=5000000,asset_id=0" \
+./beam-wallet shader \
+  --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=commit,cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,job_id=<N>,collateral=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-### Run the trigger (middleware)
+### Refund a job (requester, after expiry)
 
 ```bash
-python hypertensor_trigger.py \
-  --job_id 2 \
-  --subnet_id 1 \
-  --result_hash <RESULT_HASH_HEX> \
-  --payment 10000000 \
-  --collateral 5000000 \
-  --mnemonic "your twelve word middleware mnemonic"
+./beam-wallet shader \
+  --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=refund,cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,job_id=<N>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-The trigger polls Hypertensor until the epoch closes, reads the `Network.RewardResult` event, then calls settle or slash on Beam automatically.
+The payment, collateral, and asset_id values must match the job's actual stored values. View the job first to read them.
 
-**Test Beam connection only:**
-```bash
-python hypertensor_trigger.py --job_id 2 --subnet_id 1 \
-  --result_hash aabbccdd... --payment 10000000 --collateral 5000000 \
-  --beam_test
-```
+---
 
-**Test Hypertensor connection only:**
-```bash
-python hypertensor_trigger.py ... --mnemonic "..." --ht_test
-```
+## Running an operator node
 
-### Build contract from source
+The multi operator verification network is currently in early development. The basic shape will be:
+
+- Operators run a Beam node and CLI wallet on a machine with reasonable uptime
+- A small Python script watches the contract for jobs ready for verification
+- For deterministic jobs, the script automatically compares hashes and signs settle or slash decisions
+- Operators coordinate via Beam's SBBS messaging layer to collect the required signatures
+- Settlement requires multiple operator signatures, enforced at the contract level
+
+If you are interested in running an operator node, open an issue on this repo or reach out directly. The first phase is recruiting a small group of operators to validate the design before opening it more broadly.
+
+---
+
+## Build from source
+
+The contract and app shaders are written in C++ and built with the Beam Shader SDK.
 
 ```bash
 # Rebuild contract shader
 cd ~/shader-sdk/build/wasi && ninja idios_contract
-cp ~/shader-sdk/build/wasi/shaders/idios/idios_contract.wasm ~/idios/
 
 # Rebuild app shader
 cd ~/shader-sdk/build/wasi && ninja idios_app
-cp ~/shader-sdk/build/wasi/shaders/idios/idios_app.wasm ~/idios/
 ```
 
-Source files live in `~/shader-sdk/shaders/idios/`.
+Source files live in `~/shader-sdk/shaders/idios/`. After building, copy the resulting `.wasm` files to wherever your tooling expects them.
 
 ---
 
