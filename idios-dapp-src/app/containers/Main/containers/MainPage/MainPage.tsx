@@ -384,9 +384,9 @@ const MainPage: React.FC = () => {
             <CardTitle>⚡ Fast Settlement</CardTitle>
             <CardDesc>Settles immediately when node delivers matching result hash. Best for deterministic tasks.</CardDesc>
           </SettlementCard>
-          <SettlementCard selected={settlement === 'epoch'} onClick={() => setSettlement('epoch')}>
-            <CardTitle>🔒 Epoch Settlement</CardTitle>
-            <CardDesc>Hypertensor validators verify quality at epoch close (30–90 min). Best for large or complex jobs.</CardDesc>
+          <SettlementCard selected={false} onClick={() => {}} style={{opacity: 0.5, cursor: 'not-allowed'}}>
+            <CardTitle>🔒 Epoch Settlement (coming soon)</CardTitle>
+            <CardDesc>Multi operator verification for open ended jobs. Coming soon.</CardDesc>
           </SettlementCard>
         </SettlementOptions>
       </Section>
