@@ -81,19 +81,18 @@ Requester                Operators              Node
 
 **Confirmed working on Beam mainnet** ✅
 
-- Custom Contract Shader deployed (job create / commit / settle / slash / refund)
-- Full job lifecycle tested end to end on mainnet across multiple jobs
-- Two wallet flow proven: requester locks, node commits, middleware settles
-- Python middleware wired to Beam Wallet API (invoke_contract + process_invoke_data)
+- Contract Shader deployed and tested across multiple jobs (create / commit / settle / slash / refund)
+- Full job lifecycle validated on mainnet
 - Dapp UI for end users (create / view / refund) validated against the live contract
 
-**Working today:**
+**Working today (with single trusted middleware):**
 
-- **Fast Settlement (deterministic).** The requester commits a result hash at job creation. The node delivers matching output and middleware triggers settle. This path uses only the Beam contract and is fully validated on mainnet.
+- **Fast Settlement (deterministic).** The requester commits a result hash at job creation. The node delivers matching output. A single trusted operator running CLI commands manually triggers settle on the contract. This path validates that the contract logic works end to end. It is not yet trustless because settlement still depends on one party. Additional operators will be brought online as the multi operator middleware is built out.
 
 **In design:**
 
-- **Epoch Settlement (open ended tasks).** A consensus mechanism among middleware operators that decides settle or slash for jobs without a predetermined result hash. Per Hypertensor team guidance, the path is to build this with multiple peers first, then integrate as a Hypertensor subnet later. Currently a single operator middleware exists but multi operator consensus is not yet built.
+- **Multi operator middleware.** Replaces the single trusted operator with a small group of independent operators running automated verification scripts. Settlement requires M of N operator signatures. This is what makes Fast Settlement trustless. Phase 1 of the roadmap.
+- **Verification for non deterministic work.** Settlement mechanism for jobs without a predetermined result hash, where output quality is subjective. Currently an open design problem. Phase 3 of the roadmap.
 
 ---
 
