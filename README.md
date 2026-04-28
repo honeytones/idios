@@ -258,13 +258,40 @@ Private settlement expands the addressable market for Hypertensor subnets enterp
 
 ## Roadmap
 
-- [ ] End-to-end test with live Hypertensor node
-- [ ] Hypertensor DHT heartbeat field nodes broadcast Beam pubkeys
-- [ ] Automatic slash for dissenting individual nodes (currently slashes on epoch failure)
-- [ ] Multi-node attestation (3-of-N middleware keys via Beam seamless multisig)
-- [ ] IPFS job payload delivery via Beam's private IPFS network
-- [ ] Nephrite (asset_id=47) payment support fully implemented, needs testing
-- [ ] Consider Bittensor / Akash as additional target networks
+**Phase 1: Multi operator middleware (active)**
+
+- [ ] Multi operator keys recognised by the Beam contract
+- [ ] M of N signature requirement for settle and slash
+- [ ] Automated verification scripts running on operator machines
+- [ ] Operator coordination via Beam SBBS messaging
+- [ ] First working multi operator settlement on mainnet for a deterministic job
+
+**Phase 2: Job delivery and operator network growth**
+
+- [ ] Job specifications sent between requesters and nodes via Beam SBBS or compatible messaging
+- [ ] IPFS payload delivery via Beam's private IPFS network for larger work files
+- [ ] Encrypted payloads with keys exchanged through the messaging layer
+- [ ] Recruit operators beyond the initial small group
+- [ ] Operator staking and reputation tracking
+
+**Phase 3: Verification beyond deterministic jobs**
+
+- [ ] Verification design for non deterministic work
+- [ ] Operator economics tuned from real network usage data
+- [ ] Public operator directory with quality metrics
+
+**Phase 4: Hypertensor subnet integration**
+
+- [ ] Wrap the multi operator middleware as a Hypertensor subnet (gated on Hypertensor mainnet)
+- [ ] Operators participate in Hypertensor epoch consensus and earn subnet rewards
+- [ ] DHT heartbeat field for nodes to broadcast Beam pubkeys
+- [ ] Migration path from standalone operator network to subnet membership
+
+**Other directions under consideration**
+
+- [ ] Asset support beyond BEAM (specifically Nephrite, asset_id=47)
+- [ ] Additional target networks (Bittensor, Akash, others where private payment for compute is valuable)
+- [ ] Native dapp support for Epoch Settlement once the trigger architecture is finalised
 
 ---
 
