@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { styled } from '@linaria/react';
 import { ROUTES_PATH, ROUTES_FULL } from '@app/shared/constants';
+
+async function hashFileSHA256(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await (crypto as any).subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 const Container = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 60px 20px;
+  padding: 30px 20px;
   color: white;
   max-width: 600px;
   margin: 0 auto;
@@ -19,44 +26,359 @@ const Container = styled.div`
 const Title = styled.h1`
   font-size: 28px;
   font-weight: 700;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   color: #00f6d2;
 `;
 
-const Body = styled.p`
+const Subtitle = styled.p`
   font-size: 14px;
-  color: rgba(255,255,255,0.7);
-  text-align: center;
+  color: rgba(255,255,255,0.6);
   margin-bottom: 30px;
-  line-height: 1.6;
+  text-align: center;
+`;
+
+const Section = styled.div`
+  width: 100%;
+  margin-bottom: 24px;
+`;
+
+const SectionTitle = styled.h3`
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+`;
+
+const Label = styled.div`
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 4px;
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: white;
+  font-size: 14px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  outline: none;
+  &:focus {
+    border-color: #00f6d2;
+  }
+  &::placeholder {
+    color: rgba(255,255,255,0.3);
+  }
+`;
+
+const TextArea = styled.textarea`
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: white;
+  font-size: 13px;
+  font-family: monospace;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  outline: none;
+  resize: vertical;
+  min-height: 100px;
+  &:focus {
+    border-color: #00f6d2;
+  }
+`;
+
+const Row = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+`;
+
+const HintText = styled.div`
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  margin-top: -8px;
+  margin-bottom: 12px;
+`;
+
+const FileInputWrapper = styled.label`
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+  text-align: center;
+  &:hover {
+    border-color: #00f6d2;
+    background: rgba(0,246,210,0.05);
+  }
+  input {
+    display: none;
+  }
+`;
+
+const FileStatus = styled.div`
+  font-size: 11px;
+  color: #00f6d2;
+  margin-top: -8px;
+  margin-bottom: 8px;
+`;
+
+const SubmitButton = styled.button`
+  width: 100%;
+  padding: 14px;
+  border-radius: 8px;
+  border: none;
+  background: #00f6d2;
+  color: #042548;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  font-family: inherit;
+  &:disabled {
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.4);
+    cursor: not-allowed;
+  }
 `;
 
 const BackLink = styled.button`
   background: none;
   border: 1px solid rgba(255,255,255,0.2);
   color: rgba(255,255,255,0.7);
-  padding: 10px 20px;
-  border-radius: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
   cursor: pointer;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
+  margin-bottom: 20px;
+  align-self: flex-start;
   &:hover {
     border-color: #00f6d2;
     color: #00f6d2;
   }
 `;
 
+const OfferOutput = styled.div`
+  width: 100%;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,246,210,0.3);
+  background: rgba(0,246,210,0.05);
+  margin-bottom: 16px;
+  box-sizing: border-box;
+`;
+
+const CopyButton = styled.button`
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,246,210,0.4);
+  background: transparent;
+  color: #00f6d2;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  margin-right: 8px;
+  &:hover {
+    background: rgba(0,246,210,0.1);
+  }
+`;
+
+const ErrorMsg = styled.div`
+  color: #ff6b6b;
+  font-size: 12px;
+  margin-bottom: 12px;
+`;
+
 const FinishJobPage: React.FC = () => {
   const navigate = useNavigate();
+
+  const [description, setDescription] = useState('');
+  const [payment, setPayment] = useState('');
+  const [collateral, setCollateral] = useState('');
+  const [expiryBlock, setExpiryBlock] = useState('');
+  const [requesterAddr, setRequesterAddr] = useState('');
+  const [myAddr, setMyAddr] = useState('');
+  const [resultHash, setResultHash] = useState('');
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const [isHashing, setIsHashing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const [offerLink, setOfferLink] = useState('');
+  const [offerText, setOfferText] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [textCopied, setTextCopied] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsHashing(true);
+    setUploadedFileName(file.name);
+    setErrorMsg('');
+    try {
+      const hash = await hashFileSHA256(file);
+      setResultHash(hash);
+    } catch (err) {
+      setErrorMsg('Failed to hash file: ' + String(err));
+    } finally {
+      setIsHashing(false);
+    }
+  };
+
+  const handlePaymentChange = (val: string) => {
+    setPayment(val);
+    if (val && !isNaN(parseFloat(val))) {
+      setCollateral((parseFloat(val) * 0.5).toFixed(0));
+    }
+  };
+
+  const isValid =
+    payment.length > 0 &&
+    collateral.length > 0 &&
+    expiryBlock.length > 0 &&
+    requesterAddr.length >= 60 &&
+    myAddr.length >= 60 &&
+    resultHash.length === 64;
+
+  const handleGenerate = () => {
+    if (!isValid) {
+      setErrorMsg('Please fill in all required fields. Addresses should be 64+ chars and hash exactly 64 chars.');
+      return;
+    }
+    setErrorMsg('');
+
+    const params = new URLSearchParams();
+    params.set('payment', payment);
+    params.set('hash', resultHash);
+    params.set('worker', myAddr);
+    params.set('expiry', expiryBlock);
+    params.set('from', myAddr);
+
+    const link = window.location.origin + window.location.pathname + '?' + params.toString();
+    setOfferLink(link);
+
+    const text = [
+      '== Idios Job Offer ==',
+      '',
+      'Description: ' + (description || '(none)'),
+      'Payment: ' + payment + ' BEAM',
+      'Collateral: ' + collateral + ' BEAM',
+      'Expiry block: ' + expiryBlock,
+      '',
+      'Worker (me): ' + myAddr,
+      'Requester (you): ' + requesterAddr,
+      'Result hash: ' + resultHash,
+      '',
+      'To accept this offer:',
+      '1. Open Idios in your Beam wallet',
+      '2. Click "Start a job"',
+      '3. Paste these values into the form',
+      '4. Click Create Job',
+      '',
+      'Or paste this link into the URL bar of your Idios dapp:',
+      link,
+    ].join('\n');
+    setOfferText(text);
+  };
+
+  const copyToClipboard = (text: string, which: 'link' | 'text') => {
+    navigator.clipboard.writeText(text).then(() => {
+      if (which === 'link') {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      } else {
+        setTextCopied(true);
+        setTimeout(() => setTextCopied(false), 2000);
+      }
+    });
+  };
+
   return (
     <Container>
+      <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
       <Title>Finish a Job</Title>
-      <Body>
-        Coming soon. This page will let you submit completed work, hash your deliverable file, and generate a job offer to send to your client.
-      </Body>
-      <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>
-        Back to start
-      </BackLink>
+      <Subtitle>Submit completed work and generate an offer for your client.</Subtitle>
+
+      <Section>
+        <SectionTitle>Job Details</SectionTitle>
+        <Label>Description (for your client's reference, not on chain)</Label>
+        <Input placeholder="e.g. MD simulation of HIV protease, 100ns" value={description} onChange={e => setDescription(e.target.value)} />
+
+        <Row>
+          <div>
+            <Label>Payment (BEAM)</Label>
+            <Input placeholder="e.g. 12" value={payment} onChange={e => handlePaymentChange(e.target.value)} />
+          </div>
+          <div>
+            <Label>Collateral (BEAM)</Label>
+            <Input placeholder="Auto: 50% of payment" value={collateral} onChange={e => setCollateral(e.target.value)} />
+          </div>
+        </Row>
+
+        <Label>Expiry Block</Label>
+        <Input placeholder="e.g. 3990000" value={expiryBlock} onChange={e => setExpiryBlock(e.target.value)} />
+        <HintText>Current Beam block + ~10,000 blocks ≈ 1 week</HintText>
+      </Section>
+
+      <Section>
+        <SectionTitle>Addresses</SectionTitle>
+        <Label>Your Beam address (worker)</Label>
+        <Input placeholder="Your 64+ char Beam pubkey" value={myAddr} onChange={e => setMyAddr(e.target.value)} />
+        <Label>Client's Beam address (requester)</Label>
+        <Input placeholder="Client's 64+ char Beam pubkey" value={requesterAddr} onChange={e => setRequesterAddr(e.target.value)} />
+      </Section>
+
+      <Section>
+        <SectionTitle>Deliverable</SectionTitle>
+        <Label>Upload your finished file (computes hash automatically)</Label>
+        <FileInputWrapper>
+          {isHashing
+            ? 'Hashing file...'
+            : uploadedFileName
+              ? 'Loaded: ' + uploadedFileName
+              : 'Click to select a file'}
+          <input type="file" onChange={handleFileUpload} disabled={isHashing} />
+        </FileInputWrapper>
+        {uploadedFileName && !isHashing && (
+          <FileStatus>Hash computed locally. File never leaves your device.</FileStatus>
+        )}
+        <Label>Result hash (auto-generated from upload)</Label>
+        <Input placeholder="64 char hex hash" value={resultHash} onChange={e => setResultHash(e.target.value)} />
+      </Section>
+
+      {errorMsg && <ErrorMsg>{errorMsg}</ErrorMsg>}
+
+      <SubmitButton onClick={handleGenerate} disabled={!isValid}>
+        Generate Offer
+      </SubmitButton>
+
+      {offerLink && (
+        <Section style={{ marginTop: '24px' }}>
+          <SectionTitle>Your Offer</SectionTitle>
+          <Label>Offer text (paste into Telegram, email, etc.)</Label>
+          <TextArea readOnly value={offerText} />
+          <CopyButton onClick={() => copyToClipboard(offerText, 'text')}>
+            {textCopied ? '✓ Copied' : 'Copy text'}
+          </CopyButton>
+          <CopyButton onClick={() => copyToClipboard(offerLink, 'link')}>
+            {linkCopied ? '✓ Copied' : 'Copy link only'}
+          </CopyButton>
+        </Section>
+      )}
     </Container>
   );
 };
