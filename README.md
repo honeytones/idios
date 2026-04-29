@@ -107,6 +107,7 @@ Deployed on Beam mainnet:
 ```
 CID: 74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027
 Deployed height: 3832296
+Explorer (with parsed actions): https://explorer.0xmx.net/?network=mainnet&type=contract&id=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027
 ```
 
 **Actions:**
