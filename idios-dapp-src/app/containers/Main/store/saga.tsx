@@ -1,6 +1,6 @@
 import { call, put, takeLatest, select } from 'redux-saga/effects';
 import { navigate } from '@app/shared/store/actions';
-import { ROUTES } from '@app/shared/constants';
+import { ROUTES, ROUTES_FULL } from '@app/shared/constants';
 import { viewJob } from "@core/api";
 import { actions } from '.';
 import store from '../../../../index';
@@ -16,7 +16,7 @@ export function* loadParamsSaga(
       const isLoaded = yield select(selectIsLoaded());
       if (!isLoaded) {
         store.dispatch(setIsLoaded(true));
-        yield put(navigate(ROUTES.MAIN.MAIN_PAGE));
+        yield put(navigate(ROUTES_FULL.MAIN.LANDING));
       }
     } catch (e) {
       yield put(actions.loadFromContract.failure(e));

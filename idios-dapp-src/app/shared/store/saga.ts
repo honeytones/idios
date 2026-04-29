@@ -25,7 +25,7 @@ export function remoteEventChannel() {
       }
     }, (err) => {
         store.dispatch(setIsLoaded(true));
-        store.dispatch(navigate('/main/main_page'));
+        store.dispatch(navigate('/main/'));
         Utils.callApi("ev_subunsub", {ev_txs_changed: true, ev_system_state: true}, 
           (error, result, full) => {
             if (result) {
