@@ -149,7 +149,7 @@ The three scripts marked early prototype reflect the original Hypertensor consen
 The simplest way to use Idios today is through the Beam Desktop wallet's dapp store.
 
 1. Install the Beam Desktop wallet for your platform from [beam.mw](https://beam.mw)
-2. Sync the wallet to mainnet and fund it with a small amount of BEAM for fees
+2. Sync the wallet to mainnet and fund it with a small amount of BEAM for fees (BEAM is available on Kraken, Gate, MEXC, and CoinEx. For DEX trading, [BeamScreener](https://buybeam.my/dashboard/) is a fast community-built dashboard with charts and integrated swap)
 3. Install the Idios dapp from the wallet's DApp Store (or sideload the `.dapp` file)
 4. Open the Idios dapp from your installed apps
 
