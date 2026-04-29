@@ -1,6 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { styled } from '@linaria/react';
 import { createJob, viewJob, refundJob } from '@app/core/api';
+async function hashFileSHA256(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await (crypto as any).subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 const Container = styled.div`
   display: flex;
@@ -97,6 +103,34 @@ const Input = styled.input`
   }
 `;
 
+const FileInputWrapper = styled.label`
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.03);
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+  &:hover {
+    border-color: #00f6d2;
+    background: rgba(0,246,210,0.05);
+  }
+  input {
+    display: none;
+  }
+`;
+const FileStatus = styled.div`
+  font-size: 11px;
+  color: #00f6d2;
+  margin-top: -8px;
+  margin-bottom: 8px;
+`;
 const Row = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -248,6 +282,8 @@ const MainPage: React.FC = () => {
   // View/Refund state
   const [viewJobId, setViewJobId] = useState('');
   const [jobInfo, setJobInfo] = useState<any>(null);
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const [isHashing, setIsHashing] = useState(false);
   const [viewLoading, setViewLoading] = useState(false);
   const [viewError, setViewError] = useState('');
   const [refundLoading, setRefundLoading] = useState(false);
@@ -265,7 +301,48 @@ const MainPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsHashing(true);
+    setUploadedFileName(file.name);
+    try {
+      const hash = await hashFileSHA256(file);
+      setResultHash(hash);
+    } catch (err) {
+      console.error('Hash failed:', err);
+      setStatus('Failed to hash file');
+      setIsError(true);
+    } finally {
+      setIsHashing(false);
+    }
+  }; 
+
+  const handleFileDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    setIsHashing(true);
+    setUploadedFileName(file.name);
+    try {
+      const hash = await hashFileSHA256(file);
+      setResultHash(hash);
+    } catch (err) {
+      console.error('Hash failed:', err);
+      setStatus('Failed to hash file');
+      setIsError(true);
+    } finally {
+      setIsHashing(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+ const handleSubmit = async () => {
     setLoading(true);
     setStatus('');
     setIsError(false);
@@ -415,9 +492,21 @@ const MainPage: React.FC = () => {
       {settlement === 'fast' && (
         <Section>
           <SectionTitle>Result Verification</SectionTitle>
+          <Label>Upload deliverable file (optional, computes hash automatically)</Label>
+          <FileInputWrapper onDrop={handleFileDrop} onDragOver={handleDragOver}>
+            {isHashing
+              ? 'Hashing file...'
+              : uploadedFileName
+                ? `Loaded: ${uploadedFileName}`
+                : 'Click to select a file'}
+            <input type="file" onChange={handleFileUpload} disabled={isHashing} />
+          </FileInputWrapper>
+          {uploadedFileName && !isHashing && (
+            <FileStatus>Hash computed locally. File never leaves your device.</FileStatus>
+          )}
           <Label>Expected Result Hash</Label>
           <Input placeholder="64 char hex hash of expected output" value={resultHash} onChange={e => setResultHash(e.target.value)} />
-          <HintText>SHA256 hash of the exact output you expect the node to deliver</HintText>
+          <HintText>SHA256 hash of the deliverable. Either upload above or paste a hash directly.</HintText>
         </Section>
       )}
 
