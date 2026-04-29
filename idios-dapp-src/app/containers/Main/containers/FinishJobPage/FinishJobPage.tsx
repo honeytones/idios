@@ -16,7 +16,7 @@ const Container = styled.div`
   align-items: center;
   padding: 20px 24px;
   color: white;
-  max-width: 850px;
+  max-width: 1100px;
   margin: 0 auto;
   min-height: 100vh;
   background: #0a0a0a;
@@ -321,6 +321,8 @@ const FinishJobPage: React.FC = () => {
     <Container>
       <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
 
+      <TwoColumn>
+      <div>
       <Section>
         <SectionTitle>Job Details</SectionTitle>
         <Label>Description (for your client's reference, not on chain)</Label>
@@ -350,6 +352,8 @@ const FinishJobPage: React.FC = () => {
         <Input placeholder="Client's 64+ char Beam pubkey" value={requesterAddr} onChange={e => setRequesterAddr(e.target.value)} />
       </Section>
 
+      </div>
+      <div>
       <Section>
         <SectionTitle>Deliverable</SectionTitle>
         <Label>Upload your finished file (computes hash automatically)</Label>
@@ -367,6 +371,8 @@ const FinishJobPage: React.FC = () => {
         <Label>Result hash (auto-generated from upload)</Label>
         <Input placeholder="64 char hex hash" value={resultHash} onChange={e => setResultHash(e.target.value)} />
       </Section>
+      </div>
+      </TwoColumn>
 
       {errorMsg && <ErrorMsg>{errorMsg}</ErrorMsg>}
 

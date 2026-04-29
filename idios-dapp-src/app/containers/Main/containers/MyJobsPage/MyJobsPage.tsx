@@ -11,7 +11,7 @@ const Container = styled.div`
   align-items: center;
   padding: 20px 24px;
   color: white;
-  max-width: 850px;
+  max-width: 1100px;
   margin: 0 auto;
   min-height: 100vh;
   background: #0a0a0a;

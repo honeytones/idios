@@ -33,7 +33,7 @@ const Container = styled.div`
   align-items: center;
   padding: 20px 24px;
   color: white;
-  max-width: 850px;
+  max-width: 1100px;
   margin: 0 auto;
   min-height: 100vh;
   background: #0a0a0a;
@@ -550,6 +550,7 @@ const MainPage: React.FC = () => {
         </SettlementOptions>
       </Section>
 
+      <TwoColumn>
       <Section>
         <SectionTitle>Job Details</SectionTitle>
         <Label>Job ID</Label>
@@ -591,6 +592,7 @@ const MainPage: React.FC = () => {
           <HintText>SHA256 hash of the deliverable. Either upload above or paste a hash directly.</HintText>
         </Section>
       )}
+      </TwoColumn>
 
       <SubmitButton onClick={handleSubmit} disabled={!isValid || loading}>
         {loading ? 'Creating Job...' : 'Create Job'}
