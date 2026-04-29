@@ -9,12 +9,12 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 30px 20px;
+  padding: 20px 24px;
   color: white;
-  max-width: 600px;
+  max-width: 850px;
   margin: 0 auto;
   min-height: 100vh;
-  background: linear-gradient(to bottom, #035b8f, #042548);
+  background: #0a0a0a;
   border-radius: 12px;
 `;
 
@@ -22,7 +22,7 @@ const Title = styled.h1`
   font-size: 28px;
   font-weight: 700;
   margin-bottom: 8px;
-  color: #00f6d2;
+  color: #e8e8e8;
 `;
 
 const Subtitle = styled.p`
@@ -44,8 +44,8 @@ const BackLink = styled.button`
   margin-bottom: 20px;
   align-self: flex-start;
   &:hover {
-    border-color: #00f6d2;
-    color: #00f6d2;
+    border-color: #e8e8e8;
+    color: #e8e8e8;
   }
 `;
 
@@ -60,8 +60,8 @@ const RefreshButton = styled.button`
   font-size: 12px;
   margin-bottom: 20px;
   &:hover {
-    border-color: #00f6d2;
-    color: #00f6d2;
+    border-color: #e8e8e8;
+    color: #e8e8e8;
   }
 `;
 
@@ -85,7 +85,7 @@ const JobHeader = styled.div`
 const JobIdLabel = styled.div`
   font-size: 16px;
   font-weight: 600;
-  color: #00f6d2;
+  color: #e8e8e8;
 `;
 
 const StatusBadge = styled.span<{ kind: string }>`
@@ -114,14 +114,14 @@ const ActionRow = styled.div`
 const ActionButton = styled.button`
   padding: 8px 14px;
   border-radius: 6px;
-  border: 1px solid rgba(0,246,210,0.4);
+  border: 1px solid rgba(255,255,255,0.4);
   background: transparent;
-  color: #00f6d2;
+  color: #e8e8e8;
   font-size: 12px;
   cursor: pointer;
   font-family: inherit;
   &:hover:not(:disabled) {
-    background: rgba(0,246,210,0.1);
+    background: rgba(255,255,255,0.1);
   }
   &:disabled {
     opacity: 0.4;
@@ -242,8 +242,6 @@ const MyJobsPage: React.FC = () => {
   return (
     <Container>
       <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
-      <Title>My Jobs</Title>
-      <Subtitle>Jobs you've created from this dapp install.</Subtitle>
 
       <RefreshButton onClick={loadJobs} disabled={loading}>
         {loading ? 'Refreshing...' : 'Refresh'}

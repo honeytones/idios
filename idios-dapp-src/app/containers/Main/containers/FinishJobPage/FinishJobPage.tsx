@@ -14,12 +14,12 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 30px 20px;
+  padding: 20px 24px;
   color: white;
-  max-width: 600px;
+  max-width: 850px;
   margin: 0 auto;
   min-height: 100vh;
-  background: linear-gradient(to bottom, #035b8f, #042548);
+  background: #0a0a0a;
   border-radius: 12px;
 `;
 
@@ -27,7 +27,7 @@ const Title = styled.h1`
   font-size: 28px;
   font-weight: 700;
   margin-bottom: 8px;
-  color: #00f6d2;
+  color: #e8e8e8;
 `;
 
 const Subtitle = styled.p`
@@ -39,7 +39,7 @@ const Subtitle = styled.p`
 
 const Section = styled.div`
   width: 100%;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 `;
 
 const SectionTitle = styled.h3`
@@ -65,11 +65,11 @@ const Input = styled.input`
   background: rgba(255,255,255,0.05);
   color: white;
   font-size: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   box-sizing: border-box;
   outline: none;
   &:focus {
-    border-color: #00f6d2;
+    border-color: #e8e8e8;
   }
   &::placeholder {
     color: rgba(255,255,255,0.3);
@@ -91,7 +91,7 @@ const TextArea = styled.textarea`
   resize: vertical;
   min-height: 100px;
   &:focus {
-    border-color: #00f6d2;
+    border-color: #e8e8e8;
   }
 `;
 
@@ -99,6 +99,16 @@ const Row = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+`;
+const TwoColumn = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  width: 100%;
+  @media (max-width: 700px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
 `;
 
 const HintText = styled.div`
@@ -122,8 +132,8 @@ const FileInputWrapper = styled.label`
   cursor: pointer;
   text-align: center;
   &:hover {
-    border-color: #00f6d2;
-    background: rgba(0,246,210,0.05);
+    border-color: #e8e8e8;
+    background: rgba(255,255,255,0.05);
   }
   input {
     display: none;
@@ -132,7 +142,7 @@ const FileInputWrapper = styled.label`
 
 const FileStatus = styled.div`
   font-size: 11px;
-  color: #00f6d2;
+  color: #e8e8e8;
   margin-top: -8px;
   margin-bottom: 8px;
 `;
@@ -142,7 +152,7 @@ const SubmitButton = styled.button`
   padding: 14px;
   border-radius: 8px;
   border: none;
-  background: #00f6d2;
+  background: #e8e8e8;
   color: #042548;
   font-size: 15px;
   font-weight: 600;
@@ -168,8 +178,8 @@ const BackLink = styled.button`
   margin-bottom: 20px;
   align-self: flex-start;
   &:hover {
-    border-color: #00f6d2;
-    color: #00f6d2;
+    border-color: #e8e8e8;
+    color: #e8e8e8;
   }
 `;
 
@@ -177,8 +187,8 @@ const OfferOutput = styled.div`
   width: 100%;
   padding: 16px;
   border-radius: 8px;
-  border: 1px solid rgba(0,246,210,0.3);
-  background: rgba(0,246,210,0.05);
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.05);
   margin-bottom: 16px;
   box-sizing: border-box;
 `;
@@ -186,15 +196,15 @@ const OfferOutput = styled.div`
 const CopyButton = styled.button`
   padding: 8px 14px;
   border-radius: 6px;
-  border: 1px solid rgba(0,246,210,0.4);
+  border: 1px solid rgba(255,255,255,0.4);
   background: transparent;
-  color: #00f6d2;
+  color: #e8e8e8;
   font-size: 12px;
   cursor: pointer;
   font-family: inherit;
   margin-right: 8px;
   &:hover {
-    background: rgba(0,246,210,0.1);
+    background: rgba(255,255,255,0.1);
   }
 `;
 
@@ -310,8 +320,6 @@ const FinishJobPage: React.FC = () => {
   return (
     <Container>
       <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
-      <Title>Finish a Job</Title>
-      <Subtitle>Submit completed work and generate an offer for your client.</Subtitle>
 
       <Section>
         <SectionTitle>Job Details</SectionTitle>

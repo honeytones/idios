@@ -23,20 +23,20 @@ const BackLink = styled.button`
   margin-bottom: 20px;
   align-self: flex-start;
   &:hover {
-    border-color: #00f6d2;
-    color: #00f6d2;
+    border-color: #e8e8e8;
+    color: #e8e8e8;
   }
 `;
 const Container = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 30px 20px;
+  padding: 20px 24px;
   color: white;
-  max-width: 600px;
+  max-width: 850px;
   margin: 0 auto;
   min-height: 100vh;
-  background: linear-gradient(to bottom, #035b8f, #042548);
+  background: #0a0a0a;
   border-radius: 12px;
 `;
 
@@ -44,7 +44,7 @@ const Title = styled.h1`
   font-size: 28px;
   font-weight: 700;
   margin-bottom: 8px;
-  color: #00f6d2;
+  color: #e8e8e8;
 `;
 
 const Subtitle = styled.p`
@@ -56,7 +56,7 @@ const Subtitle = styled.p`
 
 const Section = styled.div`
   width: 100%;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 `;
 
 const SectionTitle = styled.h3`
@@ -78,13 +78,13 @@ const SettlementOptions = styled.div`
 const SettlementCard = styled.div<{ selected: boolean }>`
   padding: 16px;
   border-radius: 10px;
-  border: 2px solid ${({ selected }) => selected ? '#00f6d2' : 'rgba(255,255,255,0.1)'};
-  background: ${({ selected }) => selected ? 'rgba(0,246,210,0.08)' : 'rgba(255,255,255,0.03)'};
+  border: 2px solid ${({ selected }) => selected ? '#e8e8e8' : 'rgba(255,255,255,0.1)'};
+  background: ${({ selected }) => selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)'};
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    border-color: rgba(0,246,210,0.5);
+    border-color: rgba(255,255,255,0.5);
   }
 `;
 
@@ -109,12 +109,12 @@ const Input = styled.input`
   background: rgba(255,255,255,0.05);
   color: white;
   font-size: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   box-sizing: border-box;
   outline: none;
 
   &:focus {
-    border-color: #00f6d2;
+    border-color: #e8e8e8;
   }
 
   &::placeholder {
@@ -137,8 +137,8 @@ const FileInputWrapper = styled.label`
   text-align: center;
   transition: border-color 0.15s, background 0.15s;
   &:hover {
-    border-color: #00f6d2;
-    background: rgba(0,246,210,0.05);
+    border-color: #e8e8e8;
+    background: rgba(255,255,255,0.05);
   }
   input {
     display: none;
@@ -146,7 +146,7 @@ const FileInputWrapper = styled.label`
 `;
 const FileStatus = styled.div`
   font-size: 11px;
-  color: #00f6d2;
+  color: #e8e8e8;
   margin-top: -8px;
   margin-bottom: 8px;
 `;
@@ -154,8 +154,8 @@ const OfferBanner = styled.div`
   width: 100%;
   padding: 12px 16px;
   border-radius: 8px;
-  border: 1px solid rgba(0,246,210,0.3);
-  background: rgba(0,246,210,0.08);
+  border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.08);
   color: rgba(255,255,255,0.85);
   font-size: 13px;
   margin-bottom: 20px;
@@ -163,7 +163,7 @@ const OfferBanner = styled.div`
 `;
 const OfferBannerLabel = styled.div`
   font-size: 11px;
-  color: #00f6d2;
+  color: #e8e8e8;
   margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -172,6 +172,16 @@ const Row = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+`;
+const TwoColumn = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  width: 100%;
+  @media (max-width: 700px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
 `;
 
 const Label = styled.div`
@@ -192,7 +202,7 @@ const SubmitButton = styled.button`
   padding: 16px;
   border-radius: 50px;
   border: none;
-  background: #00f6d2;
+  background: #e8e8e8;
   color: #042548;
   font-size: 16px;
   font-weight: 700;
@@ -202,7 +212,7 @@ const SubmitButton = styled.button`
 
   &:hover {
     opacity: 0.9;
-    box-shadow: 0 0 20px rgba(0,246,210,0.3);
+    box-shadow: 0 0 20px rgba(255,255,255,0.3);
   }
 
   &:disabled {
@@ -223,8 +233,8 @@ const SecondaryButton = styled.button`
   transition: all 0.2s;
 
   &:hover {
-    border-color: #00f6d2;
-    color: #00f6d2;
+    border-color: #e8e8e8;
+    color: #e8e8e8;
   }
 
   &:disabled {
@@ -261,8 +271,8 @@ const StatusMsg = styled.div<{ error?: boolean }>`
   padding: 12px 16px;
   border-radius: 8px;
   font-size: 13px;
-  background: ${({ error }) => error ? 'rgba(255,98,92,0.15)' : 'rgba(0,246,210,0.1)'};
-  color: ${({ error }) => error ? '#ff625c' : '#00f6d2'};
+  background: ${({ error }) => error ? 'rgba(255,98,92,0.15)' : 'rgba(255,255,255,0.1)'};
+  color: ${({ error }) => error ? '#ff625c' : '#e8e8e8'};
   text-align: center;
   width: 100%;
 `;
@@ -519,8 +529,6 @@ const MainPage: React.FC = () => {
   return (
     <Container>
       <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
-      <Title>Idios</Title>
-      <Subtitle>Private settlement for decentralised AI work</Subtitle>
       {offerFrom && (
         <OfferBanner>
           <OfferBannerLabel>Job Offer Received</OfferBannerLabel>

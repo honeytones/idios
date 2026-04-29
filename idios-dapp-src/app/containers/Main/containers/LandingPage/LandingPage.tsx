@@ -7,12 +7,12 @@ const Container = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 60px 20px;
+  padding: 40px 24px;
   color: white;
-  max-width: 600px;
+  max-width: 850px;
   margin: 0 auto;
   min-height: 100vh;
-  background: linear-gradient(to bottom, #035b8f, #042548);
+  background: #0a0a0a;
   border-radius: 12px;
 `;
 
@@ -20,7 +20,7 @@ const Title = styled.h1`
   font-size: 36px;
   font-weight: 700;
   margin-bottom: 12px;
-  color: #00f6d2;
+  color: #e8e8e8;
 `;
 
 const Subtitle = styled.p`
@@ -43,8 +43,8 @@ const Card = styled.button`
   margin-bottom: 16px;
   transition: border-color 0.15s, background 0.15s, transform 0.1s;
   &:hover {
-    border-color: #00f6d2;
-    background: rgba(0,246,210,0.05);
+    border-color: #e8e8e8;
+    background: rgba(255,255,255,0.05);
   }
   &:active {
     transform: scale(0.99);
@@ -55,7 +55,7 @@ const CardTitle = styled.div`
   font-size: 20px;
   font-weight: 600;
   margin-bottom: 6px;
-  color: #00f6d2;
+  color: #e8e8e8;
 `;
 
 const CardDesc = styled.div`
