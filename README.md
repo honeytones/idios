@@ -83,7 +83,11 @@ Requester                Operators              Node
 
 - Contract Shader deployed and tested across multiple jobs (create / commit / settle / slash / refund)
 - Full job lifecycle validated on mainnet
-- Dapp UI for end users (create / view / refund) validated against the live contract
+- Dapp UI for end users validated against the live contract on Beam mainnet:
+    - Landing page with three entry points (Start a job, Finish a job, My jobs)
+    - Start a job: file upload with browser-side SHA-256 hashing, URL parameter pre-fill for shared offer links
+    - Finish a job: workers fill in deal terms, hash their deliverable, generate a shareable offer (text + link) for clients
+    - My jobs: localStorage-backed tracking of jobs created from this dapp install, with live status from chain and refund button on expired jobs
 
 **Working today (with single trusted middleware):**
 
@@ -148,7 +152,13 @@ The simplest way to use Idios today is through the Beam Desktop wallet's dapp st
 3. Install the Idios dapp from the wallet's DApp Store (or sideload the `.dapp` file)
 4. Open the Idios dapp from your installed apps
 
-From there you can create a job, view its state, and refund it after expiry. The dapp form covers all the fields needed: job ID, subnet ID, payment amount, expiry block, node public key, and the result hash for deterministic verification.
+The dapp opens to a landing page asking what you want to do. From there:
+
+    Start a job: As a requester, fill in deal terms (job ID, payment, expiry, node pubkey), upload the deliverable file you expect to receive (the dapp computes the SHA-256 hash locally — your file never leaves your device), and create the job. If you arrived via an offer link from a worker, the form auto-fills with their proposed terms.
+    Finish a job: As a worker, fill in the agreed deal terms, upload your finished deliverable, and click Generate Offer. The dapp produces both a shareable text block and a link you can send to the requester via Telegram, email, or any messenger.
+    My jobs: See the live status of every job you've created from this dapp install. Trigger a refund directly from the dashboard for jobs that expired without delivery.
+
+All form fields needed by the contract are covered: job ID, subnet ID, payment amount, expiry block, node public key, and the result hash for deterministic verification. The dapp handles converting BEAM amounts to groth, computes hashes from uploaded files, and surfaces contract state in human-readable form.
 
 > Note on expiry block: Beam mainnet produces a block roughly every 60 seconds. Set `expiry_block` to at least `current_block + 200` to give the create transaction time to confirm before expiry. For real jobs, `current_block + 1440` (~24 hours) is more typical.
 
