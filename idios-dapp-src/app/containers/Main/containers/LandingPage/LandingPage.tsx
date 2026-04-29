@@ -87,6 +87,10 @@ const LandingPage: React.FC = () => {
         <CardTitle>Finish a job</CardTitle>
         <CardDesc>Submit completed work. Lock collateral and get paid when verified.</CardDesc>
       </Card>
+      <Card onClick={() => navigate(ROUTES_FULL.MAIN.MY_JOBS)}>
+        <CardTitle>My jobs</CardTitle>
+        <CardDesc>Check status of jobs you've created. Trigger refunds on expired jobs.</CardDesc>
+      </Card>
     </Container>
   );
 };

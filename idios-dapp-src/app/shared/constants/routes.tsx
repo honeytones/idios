@@ -12,6 +12,7 @@ export const ROUTES_PATH = {
     LANDING_PAGE: '',
     START_PAGE: 'start',
     FINISH_PAGE: 'finish',
+    MY_JOBS_PAGE: 'my-jobs',
   },
   
 };
@@ -22,6 +23,7 @@ export const ROUTES_FULL = {
     LANDING: '/main/',
     START: '/main/start',
     FINISH: '/main/finish',
+    MY_JOBS: '/main/my-jobs',
     MAIN_PAGE: '/main/main_page',
   },
 };

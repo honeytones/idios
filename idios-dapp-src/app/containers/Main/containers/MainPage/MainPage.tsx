@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { ROUTES_FULL } from '@app/shared/constants';
 import { styled } from '@linaria/react';
+import { useNavigate } from 'react-router-dom';
 import { createJob, viewJob, refundJob } from '@app/core/api';
+import { addTrackedJob } from '@app/core/jobs';
 async function hashFileSHA256(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const hashBuffer = await (crypto as any).subtle.digest('SHA-256', buffer);
@@ -8,6 +11,22 @@ async function hashFileSHA256(file: File): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+const BackLink = styled.button`
+  background: none;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.7);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  margin-bottom: 20px;
+  align-self: flex-start;
+  &:hover {
+    border-color: #00f6d2;
+    color: #00f6d2;
+  }
+`;
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -286,6 +305,7 @@ const Divider = styled.div`
 `;
 
 const MainPage: React.FC = () => {
+  const navigate = useNavigate();
   const [settlement, setSettlement] = useState<'fast' | 'epoch'>('fast');
   const [jobId, setJobId] = useState('');
   const [nodePk, setNodePk] = useState('');
@@ -402,6 +422,18 @@ const MainPage: React.FC = () => {
         paymentGroth,
         parseInt(expiryBlock)
       );
+      // Track this job locally for "My Jobs" view
+      try {
+        addTrackedJob({
+          jobId: parseInt(jobId),
+          role: 'requester',
+          addedAt: Date.now(),
+          payment: payment,
+          resultHash: hash,
+        });
+      } catch (err) {
+        console.error('Could not track job:', err);
+      }
 
       setStatus(`Job ${jobId} created successfully. Share Job ID and your pubkey with the node operator.`);
     } catch (err: any) {
@@ -486,6 +518,7 @@ const MainPage: React.FC = () => {
 
   return (
     <Container>
+      <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
       <Title>Idios</Title>
       <Subtitle>Private settlement for decentralised AI work</Subtitle>
       {offerFrom && (

@@ -4,6 +4,7 @@ import { ROUTES_PATH } from '@app/shared/constants';
 import { MainPage } from '@app/containers/Main/containers/MainPage';
 import { LandingPage } from '@app/containers/Main/containers/LandingPage';
 import { FinishJobPage } from '@app/containers/Main/containers/FinishJobPage';
+import { MyJobsPage } from '@app/containers/Main/containers/MyJobsPage';
 
 const routes = [
   {
@@ -19,6 +20,11 @@ const routes = [
   {
     path: ROUTES_PATH.MAIN.FINISH_PAGE,
     element: <FinishJobPage />,
+    exact: true,
+  },
+  {
+    path: ROUTES_PATH.MAIN.MY_JOBS_PAGE,
+    element: <MyJobsPage />,
     exact: true,
   },
   {
