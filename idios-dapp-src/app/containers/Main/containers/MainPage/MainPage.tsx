@@ -131,6 +131,24 @@ const FileStatus = styled.div`
   margin-top: -8px;
   margin-bottom: 8px;
 `;
+const OfferBanner = styled.div`
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(0,246,210,0.3);
+  background: rgba(0,246,210,0.08);
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+`;
+const OfferBannerLabel = styled.div`
+  font-size: 11px;
+  color: #00f6d2;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
 const Row = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -284,6 +302,23 @@ const MainPage: React.FC = () => {
   const [jobInfo, setJobInfo] = useState<any>(null);
   const [uploadedFileName, setUploadedFileName] = useState('');
   const [isHashing, setIsHashing] = useState(false);
+  const [offerFrom, setOfferFrom] = useState('');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const p = params.get('payment');
+    const h = params.get('hash');
+    const w = params.get('worker');
+    const ex = params.get('expiry');
+    const sub = params.get('subnet');
+    const fr = params.get('from');
+    if (p) setPayment(p);
+    if (h) setResultHash(h);
+    if (w) setNodePk(w);
+    if (ex) setExpiryBlock(ex);
+    if (fr) setOfferFrom(fr);
+    // subnet param reserved for future use
+  }, []);
+
   const [viewLoading, setViewLoading] = useState(false);
   const [viewError, setViewError] = useState('');
   const [refundLoading, setRefundLoading] = useState(false);
@@ -453,6 +488,12 @@ const MainPage: React.FC = () => {
     <Container>
       <Title>Idios</Title>
       <Subtitle>Private settlement for decentralised AI work</Subtitle>
+      {offerFrom && (
+        <OfferBanner>
+          <OfferBannerLabel>Job Offer Received</OfferBannerLabel>
+          This job was prepared by {offerFrom.slice(0, 12)}...{offerFrom.slice(-8)}. Please review the details before creating the job.
+        </OfferBanner>
+      )}
 
       <Section>
         <SectionTitle>Settlement Type</SectionTitle>
