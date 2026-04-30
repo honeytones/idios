@@ -1,8 +1,8 @@
 # Idios
 
-**Private escrow and settlement layer for AI compute on Beam.**
+**Private escrow and settlement layer for AI and other compute on Beam.**
 
-Pay for AI work privately. Verifiable delivery, escrowed payment, no public record of amounts or identities.
+Pay for AI and compute work privately. Verifiable delivery, escrowed payment, no public record of amounts or identities.
 
 **[Website](https://honeytones.github.io/idios-site/)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027)**
 
