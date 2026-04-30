@@ -32,7 +32,7 @@ For deterministic work where the correct output is known in advance, verificatio
 
 The longer term goal is for Idios to operate as a [Hypertensor](https://hypertensor.org) subnet, so that anyone can run an Idios operator node and earn rewards through standard subnet economics. This decentralises verification fully and aligns operator incentives with network quality.
 
-That requires Hypertensor mainnet to be live, which is its own timeline. Following guidance from the Hypertensor team, the multi operator network is being built standalone first, with subnet integration as a later phase. The escrow contract on Beam works independently of Hypertensor and operates today.
+That requires Hypertensor mainnet to be live, which is its own timeline. Following guidance from the Hypertensor team, the multi operator network is being built standalone first, with subnet integration as a possible later phase. The escrow contract on Beam works independently of Hypertensor and operates today.
 
 Operator economics for the standalone phase are still being worked out. The basic structure is fees per settled job paid to participating operators. Real numbers will come from running the network with a small group of operators and observing what works.
 
