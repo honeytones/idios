@@ -3,6 +3,7 @@
     "description": "Private settlement for AI and other compute on Beam.",
     "url": "localapp/app/index.html",
     "app": "localapp/app/contract.wasm",
+    "icon": "localapp/app/logo.svg",
     "version": "1.1.0",
     "api_version": "7.2",
     "min_api_version": "7.0",
