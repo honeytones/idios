@@ -81,7 +81,7 @@ const LandingPage: React.FC = () => {
       <Subtitle>Private settlement for AI and other compute on Beam</Subtitle>
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.START)}>
         <CardTitle>Start a job</CardTitle>
-        <CardDesc>Hire someone for work. Lock funds in escrow until verified delivery.</CardDesc>
+        <CardDesc>Set up a private job with payment locked in escrow.</CardDesc>
       </Card>
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.FINISH)}>
         <CardTitle>Finish a job</CardTitle>
@@ -89,7 +89,7 @@ const LandingPage: React.FC = () => {
       </Card>
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.MY_JOBS)}>
         <CardTitle>My jobs</CardTitle>
-        <CardDesc>Check status of jobs you've created. Trigger refunds on expired jobs.</CardDesc>
+        <CardDesc>Track jobs you've created or accepted. Refund expired jobs.</CardDesc>
       </Card>
     </Container>
   );
