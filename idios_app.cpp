@@ -4,7 +4,7 @@
 #include <utility>
 #include <string_view>
 #include "Shaders/app_common_impl.h"
-#include "contract.h"
+#include "idios_contract.h"
 
 using Action_func_t = void (*)(const ContractID&);
 using Actions_map_t = std::vector<std::pair<std::string_view, Action_func_t>>;
@@ -28,108 +28,278 @@ auto find_if_contains(const std::string_view str, const std::vector<std::pair<st
 }
 
 // ----------------------------------------------------------------
-//  Manager actions
+//  KeyID helper structs (used for signature derivation)
+// ----------------------------------------------------------------
+
+struct UserKeyID {
+    ContractID m_Cid;
+    uint8_t    m_Ctx = 0;
+};
+
+struct ArbitratorKeyID {
+    uint8_t m_Tag = 'A';
+    uint8_t m_Ctx = 1;
+};
+
+// ----------------------------------------------------------------
+//  Manager actions (deploy, view)
 // ----------------------------------------------------------------
 
 void On_manager_deploy(const ContractID& unused)
 {
     Idios::Params params;
-    PubKey pk;
+    Env::Memset(&params, 0, sizeof(params));
 
-    // Derive middleware public key from this wallet
-    struct MiddlewareKeyID {
-        uint8_t m_Tag = 'M';
-        uint8_t m_Ctx = 1;
-    } kid;
-    Env::DerivePk(params.middleware_pk, &kid, sizeof(kid));
+    ArbitratorKeyID kid;
+    Env::DerivePk(params.arbitrator_pk, &kid, sizeof(kid));
+
+    uint64_t review_window = 10080;
+    uint64_t arbitrator_timeout = 20160;
+    Env::DocGetNum64("default_review_window", &review_window);
+    Env::DocGetNum64("arbitrator_timeout_blocks", &arbitrator_timeout);
+    params.default_review_window = review_window;
+    params.arbitrator_timeout_blocks = arbitrator_timeout;
 
     Env::GenerateKernel(nullptr, 0, &params, sizeof(params),
-        nullptr, 0, nullptr, 0, "Deploy Idios contract", 0);
+        nullptr, 0, nullptr, 0, "Deploy Idios v2 contract", 0);
 }
 
 void On_manager_view(const ContractID& cid)
 {
-    struct KeyParams { uint8_t prefix = 'P'; };
+    struct KeyParams { uint8_t prefix = Idios::Tags::s_Params; };
     Idios::Params params;
     Env::Key_T<KeyParams> key;
     key.m_Prefix.m_Cid = cid;
     if (!Env::VarReader::Read_T(key, params))
         return On_error("params not found");
+
     Env::DocGroup gr("params");
-    Env::DocAddBlob_T("middleware_pk", params.middleware_pk);
+    Env::DocAddBlob_T("arbitrator_pk", params.arbitrator_pk);
+    Env::DocAddNum64("default_review_window", params.default_review_window);
+    Env::DocAddNum64("arbitrator_timeout_blocks", params.arbitrator_timeout_blocks);
 }
 
 // ----------------------------------------------------------------
-//  User actions , job lifecycle
+//  User actions: Mode A job creation
 // ----------------------------------------------------------------
 
-void On_user_create(const ContractID& cid)
+void On_user_create_a(const ContractID& cid)
 {
-    Idios::Create args;
+    Idios::CreateModeA args;
     Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id",       &args.job_id))       return On_error("job_id required");
+    if (!Env::DocGetNum64("subnet_id",    &args.subnet_id))    return On_error("subnet_id required");
+    if (!Env::DocGetNum64("epoch",        &args.epoch))        return On_error("epoch required");
+    if (!Env::DocGetNum64("expiry_block", &args.expiry_block)) return On_error("expiry_block required");
+    if (!Env::DocGetNum64("payment",      &args.payment))      return On_error("payment required");
+    if (!Env::DocGetNum32("asset_id",     &args.asset_id))     return On_error("asset_id required");
+    if (!Env::DocGetBlob("node_pk",       &args.node_pk, sizeof(PubKey))) return On_error("node_pk required");
+    if (!Env::DocGetBlob("result_hash",   args.result_hash, 32))           return On_error("result_hash required");
 
-    if (!Env::DocGetNum64("job_id",      &args.job_id))      return On_error("job_id required");
-    if (!Env::DocGetNum64("subnet_id",   &args.subnet_id))   return On_error("subnet_id required");
-    if (!Env::DocGetNum64("epoch",       &args.epoch))       return On_error("epoch required");
-    if (!Env::DocGetNum64("expiry_block",&args.expiry_block)) return On_error("expiry_block required");
-    if (!Env::DocGetNum64("payment",     &args.payment))     return On_error("payment required");
-    if (!Env::DocGetNum32("asset_id",    &args.asset_id))    return On_error("asset_id required");
-    if (!Env::DocGetBlob("node_pk",      &args.node_pk,  sizeof(PubKey))) return On_error("node_pk required");
-    if (!Env::DocGetBlob("result_hash",  args.result_hash, 32))           return On_error("result_hash required");
-
-    // Derive requester public key from this wallet
-    struct RequesterKeyID {
-        ContractID m_Cid;
-        uint8_t    m_Ctx = 0;
-    } kid;
+    UserKeyID kid;
     kid.m_Cid = cid;
     Env::DerivePk(args.requester_pk, &kid, sizeof(kid));
-
-    // SigRequest , requester must sign
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    // FundsChange , payment moves from wallet into contract
     FundsChange fc;
     fc.m_Amount  = args.payment;
     fc.m_Aid     = args.asset_id;
-    fc.m_Consume = 1; // consume = lock into contract
+    fc.m_Consume = 1;
 
-    Env::GenerateKernel(&cid, Idios::Methods::Action_Create,
-        &args, sizeof(args),
-        &fc, 1,
-        &sigKid, 1,
-        "Idios: create job", 0);
+    Env::GenerateKernel(&cid, Idios::CreateModeA::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: create job (Mode A)", 0);
 }
+
+// ----------------------------------------------------------------
+//  User actions: Mode B job creation
+// ----------------------------------------------------------------
+
+void On_user_create_b(const ContractID& cid)
+{
+    Idios::CreateModeB args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id",               &args.job_id))               return On_error("job_id required");
+    if (!Env::DocGetNum64("subnet_id",            &args.subnet_id))            return On_error("subnet_id required");
+    if (!Env::DocGetNum64("epoch",                &args.epoch))                return On_error("epoch required");
+    if (!Env::DocGetNum64("expiry_block",         &args.expiry_block))         return On_error("expiry_block required");
+    if (!Env::DocGetNum64("review_window_blocks", &args.review_window_blocks)) return On_error("review_window_blocks required");
+    if (!Env::DocGetNum64("payment",              &args.payment))              return On_error("payment required");
+    if (!Env::DocGetNum64("dispute_fee",          &args.dispute_fee))          return On_error("dispute_fee required");
+    if (!Env::DocGetNum32("asset_id",             &args.asset_id))             return On_error("asset_id required");
+    if (!Env::DocGetBlob("node_pk",               &args.node_pk, sizeof(PubKey))) return On_error("node_pk required");
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::DerivePk(args.requester_pk, &kid, sizeof(kid));
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = args.payment;
+    fc.m_Aid     = args.asset_id;
+    fc.m_Consume = 1;
+
+    Env::GenerateKernel(&cid, Idios::CreateModeB::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: create job (Mode B)", 0);
+}
+
+// ----------------------------------------------------------------
+//  User actions: Bob commits collateral
+// ----------------------------------------------------------------
 
 void On_user_commit(const ContractID& cid)
 {
     Idios::Commit args;
     Env::Memset(&args, 0, sizeof(args));
-
-    if (!Env::DocGetNum64("job_id",     &args.job_id))    return On_error("job_id required");
+    if (!Env::DocGetNum64("job_id",     &args.job_id))     return On_error("job_id required");
     if (!Env::DocGetNum64("collateral", &args.collateral)) return On_error("collateral required");
-    if (!Env::DocGetNum32("asset_id",   &args.asset_id))  return On_error("asset_id required");
+    if (!Env::DocGetNum32("asset_id",   &args.asset_id))   return On_error("asset_id required");
 
-    // Derive node public key from this wallet
-    struct NodeKeyID {
-        ContractID m_Cid;
-        uint8_t    m_Ctx = 0;
-    } kid;
+    UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    // FundsChange , collateral moves from wallet into contract
     FundsChange fc;
     fc.m_Amount  = args.collateral;
     fc.m_Aid     = args.asset_id;
     fc.m_Consume = 1;
 
-    Env::GenerateKernel(&cid, Idios::Methods::Action_Commit,
-        &args, sizeof(args),
-        &fc, 1,
-        &sigKid, 1,
+    Env::GenerateKernel(&cid, Idios::Commit::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
         "Idios: commit to job", 0);
 }
+
+// ----------------------------------------------------------------
+//  User actions: Bob submits delivery (Mode A auto-settles, Mode B opens review)
+// ----------------------------------------------------------------
+
+void On_user_submit_delivery(const ContractID& cid)
+{
+    Idios::SubmitDelivery args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id",        &args.job_id))                   return On_error("job_id required");
+    if (!Env::DocGetBlob("delivery_hash",  args.delivery_hash, 32))         return On_error("delivery_hash required");
+
+    uint64_t payment = 0, collateral = 0;
+    uint32_t asset_id = 0;
+    uint32_t mode = 0;
+    Env::DocGetNum64("payment", &payment);
+    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum32("asset_id", &asset_id);
+    Env::DocGetNum32("mode", &mode);
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    if (mode == 'A') {
+        FundsChange fc;
+        fc.m_Amount  = payment + collateral;
+        fc.m_Aid     = asset_id;
+        fc.m_Consume = 0;
+        Env::GenerateKernel(&cid, Idios::SubmitDelivery::s_iMethod,
+            &args, sizeof(args), &fc, 1, &sigKid, 1,
+            "Idios: submit delivery (Mode A auto-settle)", 0);
+    } else {
+        Env::GenerateKernel(&cid, Idios::SubmitDelivery::s_iMethod,
+            &args, sizeof(args), nullptr, 0, &sigKid, 1,
+            "Idios: submit delivery (Mode B awaiting approval)", 0);
+    }
+}
+
+// ----------------------------------------------------------------
+//  User actions: Alice approves Mode B job
+// ----------------------------------------------------------------
+
+void On_user_approve(const ContractID& cid)
+{
+    Idios::Approve args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    uint64_t payment = 0, collateral = 0;
+    uint32_t asset_id = 0;
+    Env::DocGetNum64("payment", &payment);
+    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum32("asset_id", &asset_id);
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = payment + collateral;
+    fc.m_Aid     = asset_id;
+    fc.m_Consume = 0;
+
+    Env::GenerateKernel(&cid, Idios::Approve::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: approve delivery", 0);
+}
+
+// ----------------------------------------------------------------
+//  User actions: Alice raises dispute Mode B
+// ----------------------------------------------------------------
+
+void On_user_dispute(const ContractID& cid)
+{
+    Idios::Dispute args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    uint64_t dispute_fee = 0;
+    uint32_t asset_id = 0;
+    Env::DocGetNum64("dispute_fee", &dispute_fee);
+    Env::DocGetNum32("asset_id", &asset_id);
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = dispute_fee;
+    fc.m_Aid     = asset_id;
+    fc.m_Consume = 1;
+
+    Env::GenerateKernel(&cid, Idios::Dispute::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: dispute delivery", 0);
+}
+
+// ----------------------------------------------------------------
+//  User actions: Bob claims after review timeout (Mode B)
+// ----------------------------------------------------------------
+
+void On_user_claim_after_timeout(const ContractID& cid)
+{
+    Idios::ClaimAfterTimeout args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    uint64_t payment = 0, collateral = 0;
+    uint32_t asset_id = 0;
+    Env::DocGetNum64("payment", &payment);
+    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum32("asset_id", &asset_id);
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = payment + collateral;
+    fc.m_Aid     = asset_id;
+    fc.m_Consume = 0;
+
+    Env::GenerateKernel(&cid, Idios::ClaimAfterTimeout::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: claim payment after review timeout", 0);
+}
+
+// ----------------------------------------------------------------
+//  User actions: Alice claims refund after expiry
+// ----------------------------------------------------------------
 
 void On_user_refund(const ContractID& cid)
 {
@@ -139,82 +309,87 @@ void On_user_refund(const ContractID& cid)
 
     uint64_t payment = 0, collateral = 0;
     uint32_t asset_id = 0;
-    Env::DocGetNum64("payment",    &payment);
+    Env::DocGetNum64("payment", &payment);
     Env::DocGetNum64("collateral", &collateral);
-    Env::DocGetNum32("asset_id",   &asset_id);
+    Env::DocGetNum32("asset_id", &asset_id);
 
-    struct RequesterKeyID {
-        ContractID m_Cid;
-        uint8_t    m_Ctx = 0;
-    } kid;
+    UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
     FundsChange fc;
-    fc.m_Amount = payment + collateral;
-    fc.m_Aid = asset_id;
+    fc.m_Amount  = payment + collateral;
+    fc.m_Aid     = asset_id;
     fc.m_Consume = 0;
-    uint32_t nFunds = 1;
 
-    Env::GenerateKernel(&cid, Idios::Methods::Action_Refund,
-        &args, sizeof(args),
-        &fc, nFunds,
-        &sigKid, 1,
+    Env::GenerateKernel(&cid, Idios::Refund::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
         "Idios: refund job", 0);
 }
 
 // ----------------------------------------------------------------
-//  Middleware actions , settlement
+//  Arbitrator actions: resolve dispute to Alice (winner takes all)
 // ----------------------------------------------------------------
 
-void On_middleware_settle(const ContractID& cid)
+void On_arbitrator_resolve_alice(const ContractID& cid)
 {
-    Idios::Settle args;
+    Idios::ResolveToAlice args;
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
-    if (!Env::DocGetBlob("result_hash", args.result_hash, 32)) return On_error("result_hash required");
-    Env::DocGetNum64("attestation_pct", &args.attestation_pct);
-    uint64_t payment = 0, collateral = 0;
+
+    uint64_t total = 0;
     uint32_t asset_id = 0;
-    Env::DocGetNum64("payment", &payment);
-    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum64("total", &total);
     Env::DocGetNum32("asset_id", &asset_id);
-    struct MiddlewareKeyID { uint8_t m_Tag = 'M'; uint8_t m_Ctx = 1; } kid;
+
+    ArbitratorKeyID kid;
     Env::KeyID sigKid(&kid, sizeof(kid));
+
     FundsChange fc;
-    fc.m_Amount = payment + collateral;
-    fc.m_Aid = asset_id;
+    fc.m_Amount  = total;
+    fc.m_Aid     = asset_id;
     fc.m_Consume = 0;
-    uint32_t nFunds = 1;
-    Env::GenerateKernel(&cid, Idios::Methods::Action_Settle,
-        &args, sizeof(args), &fc, nFunds, &sigKid, 1, "Idios: settle job", 0);
+
+    Env::GenerateKernel(&cid, Idios::ResolveToAlice::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: resolve dispute to Alice", 0);
 }
-void On_middleware_slash(const ContractID& cid)
+
+// ----------------------------------------------------------------
+//  Arbitrator actions: resolve dispute to Bob (winner takes all)
+// ----------------------------------------------------------------
+
+void On_arbitrator_resolve_bob(const ContractID& cid)
 {
-    Idios::Slash args;
+    Idios::ResolveToBob args;
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
-    uint64_t payment = 0, collateral = 0;
+
+    uint64_t total = 0;
     uint32_t asset_id = 0;
-    Env::DocGetNum64("payment", &payment);
-    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum64("total", &total);
     Env::DocGetNum32("asset_id", &asset_id);
-    struct MiddlewareKeyID { uint8_t m_Tag = 'M'; uint8_t m_Ctx = 1; } kid;
+
+    ArbitratorKeyID kid;
     Env::KeyID sigKid(&kid, sizeof(kid));
+
     FundsChange fc;
-    fc.m_Amount = payment + collateral;
-    fc.m_Aid = asset_id;
+    fc.m_Amount  = total;
+    fc.m_Aid     = asset_id;
     fc.m_Consume = 0;
-    uint32_t nFunds = 1;
-    Env::GenerateKernel(&cid, Idios::Methods::Action_Slash,
-        &args, sizeof(args), &fc, nFunds, &sigKid, 1, "Idios: slash job", 0);
+
+    Env::GenerateKernel(&cid, Idios::ResolveToBob::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: resolve dispute to Bob", 0);
 }
+
+// ----------------------------------------------------------------
+//  Helper actions: get pubkeys
+// ----------------------------------------------------------------
+
 void On_user_get_key(const ContractID& cid)
 {
-    struct UserKeyID {
-        ContractID m_Cid;
-        uint8_t    m_Ctx = 0;
-    } kid;
+    UserKeyID kid;
     kid.m_Cid = cid;
     PubKey pk;
     Env::DerivePk(pk, &kid, sizeof(kid));
@@ -222,17 +397,18 @@ void On_user_get_key(const ContractID& cid)
     Env::DocAddBlob("pub_key", &pk, sizeof(PubKey));
 }
 
-void On_middleware_get_key(const ContractID& cid)
+void On_arbitrator_get_key(const ContractID& cid)
 {
-    struct MiddlewareKeyID {
-        uint8_t m_Tag = 'M';
-        uint8_t m_Ctx = 1;
-    } kid;
+    ArbitratorKeyID kid;
     PubKey pk;
     Env::DerivePk(pk, &kid, sizeof(kid));
     Env::DocGroup gr("key");
     Env::DocAddBlob("pub_key", &pk, sizeof(PubKey));
 }
+
+// ----------------------------------------------------------------
+//  View job
+// ----------------------------------------------------------------
 
 void On_user_view_job(const ContractID& cid)
 {
@@ -240,11 +416,10 @@ void On_user_view_job(const ContractID& cid)
     if (!Env::DocGetNum64("job_id", &job_id)) return On_error("job_id required");
 
     struct KeyJob {
-        uint8_t  prefix = 'J';
+        uint8_t  prefix = Idios::Tags::s_Job;
         uint64_t job_id;
     } key;
     key.job_id = job_id;
-
     Env::Key_T<KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
@@ -254,20 +429,26 @@ void On_user_view_job(const ContractID& cid)
         return On_error("Job not found");
 
     Env::DocGroup gr("job");
-    Env::DocAddNum64("job_id",       job.job_id);
-    Env::DocAddNum64("subnet_id",    job.subnet_id);
-    Env::DocAddNum64("payment",      job.payment);
-    Env::DocAddNum64("collateral",   job.collateral);
-    Env::DocAddNum32("asset_id",     job.asset_id);
-    Env::DocAddNum32("status",       (uint32_t)job.status);
-    Env::DocAddNum64("expiry_block", job.expiry_block);
-    Env::DocAddBlob("node_pk",       &job.node_pk,      sizeof(PubKey));
-    Env::DocAddBlob("requester_pk",  &job.requester_pk, sizeof(PubKey));
-    Env::DocAddBlob("result_hash",   job.result_hash,   32);
+    Env::DocAddNum64("job_id",                job.job_id);
+    Env::DocAddNum64("subnet_id",             job.subnet_id);
+    Env::DocAddNum64("payment",               job.payment);
+    Env::DocAddNum64("collateral",            job.collateral);
+    Env::DocAddNum64("dispute_fee",           job.dispute_fee);
+    Env::DocAddNum32("asset_id",              job.asset_id);
+    Env::DocAddNum32("status",                (uint32_t)job.status);
+    Env::DocAddNum32("mode",                  (uint32_t)job.mode);
+    Env::DocAddNum64("expiry_block",          job.expiry_block);
+    Env::DocAddNum64("review_window_blocks",  job.review_window_blocks);
+    Env::DocAddNum64("review_deadline_block", job.review_deadline_block);
+    Env::DocAddNum64("dispute_filed_block",   job.dispute_filed_block);
+    Env::DocAddBlob("node_pk",                &job.node_pk, sizeof(PubKey));
+    Env::DocAddBlob("requester_pk",           &job.requester_pk, sizeof(PubKey));
+    Env::DocAddBlob("result_hash",            job.result_hash, 32);
+    Env::DocAddBlob("delivery_hash",          job.delivery_hash, 32);
 }
 
 // ----------------------------------------------------------------
-//  Method_0 , schema export
+//  Method_0: schema export
 // ----------------------------------------------------------------
 
 BEAM_EXPORT void Method_0()
@@ -277,17 +458,13 @@ BEAM_EXPORT void Method_0()
         Env::DocGroup gr("roles");
         {
             Env::DocGroup grRole("manager");
-            {
-                Env::DocGroup grMethod("deploy");
-            }
-            {
-                Env::DocGroup grMethod("view");
-            }
+            { Env::DocGroup grMethod("deploy"); }
+            { Env::DocGroup grMethod("view"); }
         }
         {
             Env::DocGroup grRole("user");
             {
-                Env::DocGroup grMethod("create");
+                Env::DocGroup grMethod("create_a");
                 Env::DocAddText("job_id",       "uint64");
                 Env::DocAddText("subnet_id",    "uint64");
                 Env::DocAddText("epoch",        "uint64");
@@ -298,8 +475,49 @@ BEAM_EXPORT void Method_0()
                 Env::DocAddText("result_hash",  "blob32");
             }
             {
+                Env::DocGroup grMethod("create_b");
+                Env::DocAddText("job_id",               "uint64");
+                Env::DocAddText("subnet_id",            "uint64");
+                Env::DocAddText("epoch",                "uint64");
+                Env::DocAddText("expiry_block",         "uint64");
+                Env::DocAddText("review_window_blocks", "uint64");
+                Env::DocAddText("payment",              "Amount");
+                Env::DocAddText("dispute_fee",          "Amount");
+                Env::DocAddText("asset_id",             "AssetID");
+                Env::DocAddText("node_pk",              "PubKey");
+            }
+            {
                 Env::DocGroup grMethod("commit");
                 Env::DocAddText("job_id",     "uint64");
+                Env::DocAddText("collateral", "Amount");
+                Env::DocAddText("asset_id",   "AssetID");
+            }
+            {
+                Env::DocGroup grMethod("submit_delivery");
+                Env::DocAddText("job_id",        "uint64");
+                Env::DocAddText("delivery_hash", "blob32");
+                Env::DocAddText("mode",          "uint32");
+                Env::DocAddText("payment",       "Amount");
+                Env::DocAddText("collateral",    "Amount");
+                Env::DocAddText("asset_id",      "AssetID");
+            }
+            {
+                Env::DocGroup grMethod("approve");
+                Env::DocAddText("job_id",     "uint64");
+                Env::DocAddText("payment",    "Amount");
+                Env::DocAddText("collateral", "Amount");
+                Env::DocAddText("asset_id",   "AssetID");
+            }
+            {
+                Env::DocGroup grMethod("dispute");
+                Env::DocAddText("job_id",      "uint64");
+                Env::DocAddText("dispute_fee", "Amount");
+                Env::DocAddText("asset_id",    "AssetID");
+            }
+            {
+                Env::DocGroup grMethod("claim_after_timeout");
+                Env::DocAddText("job_id",     "uint64");
+                Env::DocAddText("payment",    "Amount");
                 Env::DocAddText("collateral", "Amount");
                 Env::DocAddText("asset_id",   "AssetID");
             }
@@ -313,23 +531,25 @@ BEAM_EXPORT void Method_0()
             }
         }
         {
-            Env::DocGroup grRole("middleware");
+            Env::DocGroup grRole("arbitrator");
             {
-                Env::DocGroup grMethod("settle");
-                Env::DocAddText("job_id",          "uint64");
-                Env::DocAddText("result_hash",      "blob32");
-                Env::DocAddText("attestation_pct",  "uint64");
+                Env::DocGroup grMethod("resolve_alice");
+                Env::DocAddText("job_id",   "uint64");
+                Env::DocAddText("total",    "Amount");
+                Env::DocAddText("asset_id", "AssetID");
             }
             {
-                Env::DocGroup grMethod("slash");
-                Env::DocAddText("job_id", "uint64");
+                Env::DocGroup grMethod("resolve_bob");
+                Env::DocAddText("job_id",   "uint64");
+                Env::DocAddText("total",    "Amount");
+                Env::DocAddText("asset_id", "AssetID");
             }
         }
     }
 }
 
 // ----------------------------------------------------------------
-//  Method_1 , dispatch
+//  Method_1: dispatch
 // ----------------------------------------------------------------
 
 BEAM_EXPORT void Method_1()
@@ -340,21 +560,27 @@ BEAM_EXPORT void Method_1()
         {"view",   On_manager_view},
     };
     const Actions_map_t USER_ACTIONS = {
-        {"create",   On_user_create},
-        {"commit",   On_user_commit},
-        {"refund",   On_user_refund},
-        {"view_job", On_user_view_job},
-        {"get_key", On_user_get_key},
+        {"create_a",            On_user_create_a},
+        {"create_b",            On_user_create_b},
+        {"create",              On_user_create_a},
+        {"commit",              On_user_commit},
+        {"submit_delivery",     On_user_submit_delivery},
+        {"approve",             On_user_approve},
+        {"dispute",             On_user_dispute},
+        {"claim_after_timeout", On_user_claim_after_timeout},
+        {"refund",              On_user_refund},
+        {"view_job",            On_user_view_job},
+        {"get_key",             On_user_get_key},
     };
-    const Actions_map_t MIDDLEWARE_ACTIONS = {
-        {"settle", On_middleware_settle},
-        {"slash",  On_middleware_slash},
-        {"get_key", On_middleware_get_key},
+    const Actions_map_t ARBITRATOR_ACTIONS = {
+        {"resolve_alice", On_arbitrator_resolve_alice},
+        {"resolve_bob",   On_arbitrator_resolve_bob},
+        {"get_key",       On_arbitrator_get_key},
     };
     const Roles_map_t VALID_ROLES = {
         {"manager",    MANAGER_ACTIONS},
         {"user",       USER_ACTIONS},
-        {"middleware", MIDDLEWARE_ACTIONS},
+        {"arbitrator", ARBITRATOR_ACTIONS},
     };
 
     char action[ACTION_BUF_SIZE], role[ROLE_BUF_SIZE];
