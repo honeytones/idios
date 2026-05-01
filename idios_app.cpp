@@ -1,30 +1,36 @@
 #include "Shaders/common.h"
-#include <algorithm>
-#include <vector>
-#include <utility>
-#include <string_view>
 #include "Shaders/app_common_impl.h"
 #include "idios_contract.h"
 
 using Action_func_t = void (*)(const ContractID&);
-using Actions_map_t = std::vector<std::pair<std::string_view, Action_func_t>>;
-using Roles_map_t = std::vector<std::pair<std::string_view, const Actions_map_t&>>;
 
-constexpr size_t ACTION_BUF_SIZE = 32;
-constexpr size_t ROLE_BUF_SIZE = 16;
+struct ActionEntry {
+    const char* name;
+    Action_func_t handler;
+};
+
+struct RoleEntry {
+    const char* name;
+    const ActionEntry* actions;
+    uint32_t action_count;
+};
+
+constexpr uint32_t ACTION_BUF_SIZE = 32;
+constexpr uint32_t ROLE_BUF_SIZE = 16;
+
+static int str_eq(const char* a, const char* b)
+{
+    while (*a && *b) {
+        if (*a != *b) return 0;
+        ++a; ++b;
+    }
+    return *a == *b;
+}
 
 void On_error(const char* msg)
 {
     Env::DocGroup root("");
     Env::DocAddText("error", msg);
-}
-
-template <typename T>
-auto find_if_contains(const std::string_view str, const std::vector<std::pair<std::string_view, T>>& v)
-{
-    return std::find_if(v.begin(), v.end(), [&str](const auto& p) {
-        return str == p.first;
-    });
 }
 
 // ----------------------------------------------------------------
@@ -554,12 +560,12 @@ BEAM_EXPORT void Method_0()
 
 BEAM_EXPORT void Method_1()
 {
-    const Actions_map_t MANAGER_ACTIONS = {
+    static const ActionEntry MANAGER_ACTIONS[] = {
         {"deploy", On_manager_deploy},
         {"create", On_manager_deploy},
         {"view",   On_manager_view},
     };
-    const Actions_map_t USER_ACTIONS = {
+    static const ActionEntry USER_ACTIONS[] = {
         {"create_a",            On_user_create_a},
         {"create_b",            On_user_create_b},
         {"create",              On_user_create_a},
@@ -572,34 +578,47 @@ BEAM_EXPORT void Method_1()
         {"view_job",            On_user_view_job},
         {"get_key",             On_user_get_key},
     };
-    const Actions_map_t ARBITRATOR_ACTIONS = {
+    static const ActionEntry ARBITRATOR_ACTIONS[] = {
         {"resolve_alice", On_arbitrator_resolve_alice},
         {"resolve_bob",   On_arbitrator_resolve_bob},
         {"get_key",       On_arbitrator_get_key},
     };
-    const Roles_map_t VALID_ROLES = {
-        {"manager",    MANAGER_ACTIONS},
-        {"user",       USER_ACTIONS},
-        {"arbitrator", ARBITRATOR_ACTIONS},
+    static const RoleEntry VALID_ROLES[] = {
+        {"manager",    MANAGER_ACTIONS,    sizeof(MANAGER_ACTIONS) / sizeof(MANAGER_ACTIONS[0])},
+        {"user",       USER_ACTIONS,       sizeof(USER_ACTIONS) / sizeof(USER_ACTIONS[0])},
+        {"arbitrator", ARBITRATOR_ACTIONS, sizeof(ARBITRATOR_ACTIONS) / sizeof(ARBITRATOR_ACTIONS[0])},
     };
+    static const uint32_t ROLE_COUNT = sizeof(VALID_ROLES) / sizeof(VALID_ROLES[0]);
 
     char action[ACTION_BUF_SIZE], role[ROLE_BUF_SIZE];
 
     if (!Env::DocGetText("role", role, sizeof(role)))
         return On_error("role required");
 
-    auto it_role = find_if_contains(role, VALID_ROLES);
-    if (it_role == VALID_ROLES.end())
+    const RoleEntry* found_role = nullptr;
+    for (uint32_t i = 0; i < ROLE_COUNT; i++) {
+        if (str_eq(role, VALID_ROLES[i].name)) {
+            found_role = &VALID_ROLES[i];
+            break;
+        }
+    }
+    if (!found_role)
         return On_error("invalid role");
 
     if (!Env::DocGetText("action", action, sizeof(action)))
         return On_error("action required");
 
-    auto it_action = find_if_contains(action, it_role->second);
-    if (it_action == it_role->second.end())
+    Action_func_t found_handler = nullptr;
+    for (uint32_t i = 0; i < found_role->action_count; i++) {
+        if (str_eq(action, found_role->actions[i].name)) {
+            found_handler = found_role->actions[i].handler;
+            break;
+        }
+    }
+    if (!found_handler)
         return On_error("invalid action");
 
     ContractID cid;
     Env::DocGet("cid", cid);
-    it_action->second(cid);
+    found_handler(cid);
 }

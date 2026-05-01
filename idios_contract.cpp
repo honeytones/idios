@@ -96,6 +96,9 @@ BEAM_EXPORT void Method_3(const Idios::Commit& args) {
     SaveJob(job);
 }
 
+BEAM_EXPORT void Method_4(void*) { Env::Halt(); }
+BEAM_EXPORT void Method_5(void*) { Env::Halt(); }
+
 BEAM_EXPORT void Method_6(const Idios::Refund& args) {
     Idios::Job job;
     Env::Halt_if(!LoadJob(args.job_id, job));
@@ -110,6 +113,8 @@ BEAM_EXPORT void Method_6(const Idios::Refund& args) {
     job.status = Idios::JobStatus::Refunded;
     SaveJob(job);
 }
+
+BEAM_EXPORT void Method_7(void*) { Env::Halt(); }
 
 BEAM_EXPORT void Method_8(const Idios::CreateModeB& args) {
     Env::Halt_if(args.payment == 0);
