@@ -16,3 +16,4 @@ beam-wallet.cfg
 *.dapp
 *.bak
 *.before_*
+*.v1backup

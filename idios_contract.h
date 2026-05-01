@@ -4,75 +4,124 @@ namespace Idios {
 
 #pragma pack (push, 1)
 
+struct Tags {
+    static const uint8_t s_Job    = 0;
+    static const uint8_t s_Params = 1;
+};
+
 enum JobStatus : uint8_t {
-    Open     = 0,
-    Active   = 1,
-    Settled  = 2,
-    Slashed  = 3,
-    Refunded = 4,
+    Open              = 0,
+    Active            = 1,
+    AwaitingApproval  = 2,
+    Disputed          = 3,
+    Settled           = 4,
+    Refunded          = 5,
+};
+
+enum JobMode : uint8_t {
+    ModeA = 'A',
+    ModeB = 'B',
 };
 
 struct Job {
-    PubKey   requester_pk;
-    PubKey   node_pk;
-    Amount   payment;
-    Amount   collateral;
-    AssetID  asset_id;
-    uint64_t job_id;
-    uint64_t subnet_id;
-    uint64_t epoch;
-    uint64_t expiry_block;
-    uint8_t  result_hash[32];
+    PubKey    requester_pk;
+    PubKey    node_pk;
+    Amount    payment;
+    Amount    collateral;
+    Amount    dispute_fee;
+    AssetID   asset_id;
+    uint64_t  job_id;
+    uint64_t  subnet_id;
+    uint64_t  epoch;
+    Height    expiry_block;
+    Height    review_window_blocks;
+    Height    review_deadline_block;
+    Height    dispute_filed_block;
+    uint8_t   result_hash[32];
+    uint8_t   delivery_hash[32];
+    uint8_t   mode;
     JobStatus status;
 };
 
-enum Methods : uint32_t {
-    Action_Create  = 2,
-    Action_Commit  = 3,
-    Action_Settle  = 4,
-    Action_Slash   = 5,
-    Action_Refund  = 6,
-    Action_View    = 7,
+struct Params {
+    PubKey arbitrator_pk;
+    Height default_review_window;
+    Height arbitrator_timeout_blocks;
 };
 
-struct Create {
-    uint64_t job_id;
-    uint64_t subnet_id;
-    uint64_t epoch;
-    uint64_t expiry_block;
-    PubKey   node_pk;
-    PubKey   requester_pk;
-    Amount   payment;
-    AssetID  asset_id;
-    uint8_t  result_hash[32];
+struct CreateModeA {
+    static const uint32_t s_iMethod = 2;
+    uint64_t  job_id;
+    uint64_t  subnet_id;
+    uint64_t  epoch;
+    Height    expiry_block;
+    PubKey    node_pk;
+    PubKey    requester_pk;
+    Amount    payment;
+    AssetID   asset_id;
+    uint8_t   result_hash[32];
 };
 
 struct Commit {
-    uint64_t job_id;
-    Amount   collateral;
-    AssetID  asset_id;
-};
-
-struct Settle {
-    uint64_t job_id;
-    uint8_t  result_hash[32];
-    uint64_t attestation_pct;
-};
-
-struct Slash {
-    uint64_t job_id;
+    static const uint32_t s_iMethod = 3;
+    uint64_t  job_id;
+    Amount    collateral;
+    AssetID   asset_id;
 };
 
 struct Refund {
-    uint64_t job_id;
+    static const uint32_t s_iMethod = 6;
+    uint64_t  job_id;
+};
+
+struct CreateModeB {
+    static const uint32_t s_iMethod = 8;
+    uint64_t  job_id;
+    uint64_t  subnet_id;
+    uint64_t  epoch;
+    Height    expiry_block;
+    Height    review_window_blocks;
+    PubKey    node_pk;
+    PubKey    requester_pk;
+    Amount    payment;
+    Amount    dispute_fee;
+    AssetID   asset_id;
+};
+
+struct SubmitDelivery {
+    static const uint32_t s_iMethod = 9;
+    uint64_t  job_id;
+    uint8_t   delivery_hash[32];
+};
+
+struct Approve {
+    static const uint32_t s_iMethod = 10;
+    uint64_t  job_id;
+};
+
+struct Dispute {
+    static const uint32_t s_iMethod = 11;
+    uint64_t  job_id;
+};
+
+struct ResolveToAlice {
+    static const uint32_t s_iMethod = 12;
+    uint64_t  job_id;
+};
+
+struct ResolveToBob {
+    static const uint32_t s_iMethod = 13;
+    uint64_t  job_id;
+};
+
+struct ClaimAfterTimeout {
+    static const uint32_t s_iMethod = 14;
+    uint64_t  job_id;
 };
 
 struct View {
-    uint64_t job_id;
-};
-
-struct Params {
-    PubKey middleware_pk;
+    static const uint32_t s_iMethod = 7;
+    uint64_t  job_id;
 };
 
 #pragma pack (pop)
