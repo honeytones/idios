@@ -16,6 +16,9 @@ enum JobStatus : uint8_t {
     Disputed          = 3,
     Settled           = 4,
     Refunded          = 5,
+    ResolvedToAlice   = 6,
+    ResolvedToBob     = 7,
+    Closed            = 8,
 };
 
 enum JobMode : uint8_t {
@@ -116,6 +119,10 @@ struct ResolveToBob {
 
 struct ClaimAfterTimeout {
     static const uint32_t s_iMethod = 14;
+    uint64_t  job_id;
+};
+struct Claim {
+    static const uint32_t s_iMethod = 15;
     uint64_t  job_id;
 };
 

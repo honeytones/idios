@@ -175,7 +175,6 @@ BEAM_EXPORT void Method_10(const Idios::Approve& args) {
     Env::Halt_if(Env::get_Height() > job.review_deadline_block);
 
     Env::AddSig(job.requester_pk);
-    Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
     job.status = Idios::JobStatus::Settled;
     SaveJob(job);
 }
@@ -204,8 +203,7 @@ BEAM_EXPORT void Method_12(const Idios::ResolveToAlice& args) {
     Env::Halt_if(!LoadParams(params));
 
     Env::AddSig(params.arbitrator_pk);
-    Env::FundsUnlock(job.asset_id, job.payment + job.collateral + job.dispute_fee);
-    job.status = Idios::JobStatus::Settled;
+    job.status = Idios::JobStatus::ResolvedToAlice;
     SaveJob(job);
 }
 
@@ -219,8 +217,7 @@ BEAM_EXPORT void Method_13(const Idios::ResolveToBob& args) {
     Env::Halt_if(!LoadParams(params));
 
     Env::AddSig(params.arbitrator_pk);
-    Env::FundsUnlock(job.asset_id, job.payment + job.collateral + job.dispute_fee);
-    job.status = Idios::JobStatus::Settled;
+    job.status = Idios::JobStatus::ResolvedToBob;
     SaveJob(job);
 }
 
@@ -232,7 +229,27 @@ BEAM_EXPORT void Method_14(const Idios::ClaimAfterTimeout& args) {
     Env::Halt_if(Env::get_Height() <= job.review_deadline_block);
 
     Env::AddSig(job.node_pk);
-    Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
     job.status = Idios::JobStatus::Settled;
+    SaveJob(job);
+}
+
+BEAM_EXPORT void Method_15(const Idios::Claim& args) {
+    Idios::Job job;
+    Env::Halt_if(!LoadJob(args.job_id, job));
+
+    if (job.status == Idios::JobStatus::Settled) {
+        Env::AddSig(job.node_pk);
+        Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
+    } else if (job.status == Idios::JobStatus::ResolvedToBob) {
+        Env::AddSig(job.node_pk);
+        Env::FundsUnlock(job.asset_id, job.payment + job.collateral + job.dispute_fee);
+    } else if (job.status == Idios::JobStatus::ResolvedToAlice) {
+        Env::AddSig(job.requester_pk);
+        Env::FundsUnlock(job.asset_id, job.payment + job.collateral + job.dispute_fee);
+    } else {
+        Env::Halt();
+    }
+
+    job.status = Idios::JobStatus::Closed;
     SaveJob(job);
 }

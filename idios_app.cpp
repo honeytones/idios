@@ -224,10 +224,24 @@ void On_user_approve(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    uint64_t payment = 0, collateral = 0;
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    Env::GenerateKernel(&cid, Idios::Approve::s_iMethod,
+        &args, sizeof(args), nullptr, 0, &sigKid, 1,
+        "Idios: approve delivery", 0);
+}
+
+void On_user_claim(const ContractID& cid)
+{
+    Idios::Claim args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    uint64_t total = 0;
     uint32_t asset_id = 0;
-    Env::DocGetNum64("payment", &payment);
-    Env::DocGetNum64("collateral", &collateral);
+    Env::DocGetNum64("total", &total);
     Env::DocGetNum32("asset_id", &asset_id);
 
     UserKeyID kid;
@@ -235,13 +249,13 @@ void On_user_approve(const ContractID& cid)
     Env::KeyID sigKid(&kid, sizeof(kid));
 
     FundsChange fc;
-    fc.m_Amount  = payment + collateral;
+    fc.m_Amount  = total;
     fc.m_Aid     = asset_id;
     fc.m_Consume = 0;
 
-    Env::GenerateKernel(&cid, Idios::Approve::s_iMethod,
+    Env::GenerateKernel(&cid, Idios::Claim::s_iMethod,
         &args, sizeof(args), &fc, 1, &sigKid, 1,
-        "Idios: approve delivery", 0);
+        "Idios: claim settled funds", 0);
 }
 
 // ----------------------------------------------------------------
@@ -283,24 +297,13 @@ void On_user_claim_after_timeout(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    uint64_t payment = 0, collateral = 0;
-    uint32_t asset_id = 0;
-    Env::DocGetNum64("payment", &payment);
-    Env::DocGetNum64("collateral", &collateral);
-    Env::DocGetNum32("asset_id", &asset_id);
-
     UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    FundsChange fc;
-    fc.m_Amount  = payment + collateral;
-    fc.m_Aid     = asset_id;
-    fc.m_Consume = 0;
-
     Env::GenerateKernel(&cid, Idios::ClaimAfterTimeout::s_iMethod,
-        &args, sizeof(args), &fc, 1, &sigKid, 1,
-        "Idios: claim payment after review timeout", 0);
+        &args, sizeof(args), nullptr, 0, &sigKid, 1,
+        "Idios: mark claimable after review timeout", 0);
 }
 
 // ----------------------------------------------------------------
@@ -343,21 +346,11 @@ void On_arbitrator_resolve_alice(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    uint64_t total = 0;
-    uint32_t asset_id = 0;
-    Env::DocGetNum64("total", &total);
-    Env::DocGetNum32("asset_id", &asset_id);
-
     ArbitratorKeyID kid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    FundsChange fc;
-    fc.m_Amount  = total;
-    fc.m_Aid     = asset_id;
-    fc.m_Consume = 0;
-
     Env::GenerateKernel(&cid, Idios::ResolveToAlice::s_iMethod,
-        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        &args, sizeof(args), nullptr, 0, &sigKid, 1,
         "Idios: resolve dispute to Alice", 0);
 }
 
@@ -371,21 +364,11 @@ void On_arbitrator_resolve_bob(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    uint64_t total = 0;
-    uint32_t asset_id = 0;
-    Env::DocGetNum64("total", &total);
-    Env::DocGetNum32("asset_id", &asset_id);
-
     ArbitratorKeyID kid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    FundsChange fc;
-    fc.m_Amount  = total;
-    fc.m_Aid     = asset_id;
-    fc.m_Consume = 0;
-
     Env::GenerateKernel(&cid, Idios::ResolveToBob::s_iMethod,
-        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        &args, sizeof(args), nullptr, 0, &sigKid, 1,
         "Idios: resolve dispute to Bob", 0);
 }
 
@@ -532,6 +515,12 @@ BEAM_EXPORT void Method_0()
                 Env::DocAddText("job_id", "uint64");
             }
             {
+                Env::DocGroup grMethod("claim");
+                Env::DocAddText("job_id",   "uint64");
+                Env::DocAddText("total",    "Amount");
+                Env::DocAddText("asset_id", "AssetID");
+            }
+            {
                 Env::DocGroup grMethod("view_job");
                 Env::DocAddText("job_id", "uint64");
             }
@@ -575,6 +564,7 @@ BEAM_EXPORT void Method_1()
         {"dispute",             On_user_dispute},
         {"claim_after_timeout", On_user_claim_after_timeout},
         {"refund",              On_user_refund},
+        {"claim",               On_user_claim},
         {"view_job",            On_user_view_job},
         {"get_key",             On_user_get_key},
     };
