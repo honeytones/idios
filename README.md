@@ -1,319 +1,358 @@
 # Idios
 
-**Private escrow and settlement layer for AI and other compute on Beam.**
+**Private escrow and settlement for AI and other compute on Beam.**
 
-Pay for AI and compute work privately. Verifiable delivery, escrowed payment, no public record of amounts or identities.
+Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on-chain dispute resolution. No public record of amounts or parties.
 
-**[Website](https://honeytones.github.io/idios-site/)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027)**
+**[Website](https://honeytones.github.io/idios-site/)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45)**
 
-> "Run AI on sensitive data privately, verifiably, without trusting any single party."
+> "Pay privately. Verify on chain. Dispute when needed."
 
 ---
 
 ## Why
 
-Public payment rails leak everything. Who hires whom, what they pay, how often. For anyone running sensitive work or operating in regulated industries, that visibility is a dealbreaker regardless of how capable the underlying AI is.
+Public payment rails leak. Every job, every payment, every counterparty becomes part of a permanent searchable record. For AI inference, model training, scientific compute, work that involves proprietary inputs, private data, or competitive operations, that visibility is a dealbreaker.
 
-Idios solves the payment and settlement privacy problem. Payment is locked in private escrow on [Beam](https://beam.mw). The node providing the work locks collateral as a performance bond. Verification happens independently of any public chain. None of it appears on a public ledger.
-
----
-
-## How verification works
-
-Verification is what makes the escrow trustworthy. Without it, settle and slash decisions would rest on a single party.
-
-The path forward is a multi operator network. Operators run Beam nodes and automated verification scripts. Each operator independently checks whether the work was delivered correctly. Settlement requires multiple operators to agree, enforced by Beam multi signature at the contract level.
-
-For deterministic work where the correct output is known in advance, verification is automatic. Operators compare hashes and sign the result. For non deterministic work, verification design is open and depends on the use case.
-
----
-
-## Where this is going
-
-The longer term goal is for Idios to operate as a [Hypertensor](https://hypertensor.org) subnet, so that anyone can run an Idios operator node and earn rewards through standard subnet economics. This decentralises verification fully and aligns operator incentives with network quality.
-
-That requires Hypertensor mainnet to be live, which is its own timeline. Following guidance from the Hypertensor team, the multi operator network is being built standalone first, with subnet integration as a possible later phase. The escrow contract on Beam works independently of Hypertensor and operates today.
-
-Operator economics for the standalone phase are still being worked out. The basic structure is fees per settled job paid to participating operators. Real numbers will come from running the network with a small group of operators and observing what works.
+Idios solves the payment and settlement privacy problem. Payment is locked in private escrow on [Beam](https://beam.mw). The worker locks collateral as a performance bond. Settlement happens on chain with full privacy of amounts and parties. Beam's MimbleWimble protocol hides amounts and identities at the base layer. Idios is escrow built on top.
 
 ---
 
 ## How it works
 
-Idios runs entirely on Beam. The contract handles escrow, payment, and slashing. A small group of independent operator scripts handle verification and trigger settlement decisions. Hypertensor integration is a future phase.
+Two settlement modes, picked per job at creation time.
 
-```
-Requester                Operators              Node
-    │                         │                     │
-    ├─── create job ──────────►│                     │
-    │    (locks BEAM escrow)   │                     │
-    │                         │                     │
-    │                         │  job spec via SBBS  │
-    │  ─────────────────────────────────────────────►│
-    │                         │                     │
-    │                         │       inference     │
-    │                         │  ◄──────────────────┤
-    │                         │                     │
-    │                         │ verify + sign       │
-    │                         │ M of N attestations │
-    │                         │                     │
-    │                         ├─── settle ──────────► Beam contract
-    │                              (payment releases privately)
-```
+### Fast Settlement (Mode A)
 
-**Three components:**
+For deterministic work where the correct output is a specific hash known in advance.
 
-- **Beam contract** Private escrow, payment release, slashing, multi signature settlement
-- **Operator network** Independent verifiers running automated scripts, signing settle and slash decisions
-- **Hypertensor** Future integration as a subnet for permissionless operator participation and stake weighted consensus
+1. Requester locks payment, declares the expected result hash.
+2. Worker locks collateral.
+3. Worker delivers work and submits the result hash on chain.
+4. If hashes match, the contract atomically releases payment plus collateral to the worker. Done.
 
-**Job lifecycle:**
+No third party involved. Trustless when the hash is right.
 
-1. Requester calls `create` and locks payment, specifies node pubkey and result hash
-2. Node calls `commit` and locks collateral, job moves to Active
-3. Requester sends the actual work specification to the node (via SBBS or out of band)
-4. Node performs the work and returns the result
-5. Operators verify the result independently (hash match for deterministic jobs)
-6. Once M of N operators agree, settle releases payment to the node, or slash burns collateral and refunds the requester
-7. If no operator agreement is reached before expiry, the requester can refund directly
+### Reviewed Settlement (Mode B)
+
+For non deterministic or open ended work where the requester needs to review the output.
+
+1. Requester locks payment, sets a review window and dispute fee.
+2. Worker locks collateral.
+3. Worker delivers work (uploaded out of band or via IPFS, hash recorded on chain).
+4. Requester reviews the work and either:
+   - **Approves**, allowing the worker to claim payment + collateral.
+   - **Disputes**, locking the dispute fee and pushing the case to arbitration.
+   - **Does nothing** until the review window expires, after which the worker can claim payment + collateral via timeout.
+5. If disputed, an on-chain arbitrator resolves to either party. Winner claims the full pot (payment + collateral + dispute fee).
+
+Funds always flow to the right party. The arbitrator can decide who wins a dispute but never receives the funds themselves.
+
+### Two phase claim
+
+Idios v2.1 uses a two phase claim pattern. Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the job status but never move funds. The beneficiary then calls `claim` to actually receive the payout, signed by their own key. This works around a Beam BVM constraint where a single kernel cannot cleanly sign for one party while routing funds to another.
 
 ---
 
 ## Status
 
-**Confirmed working on Beam mainnet** ✅
+**Live on Beam mainnet** ✅
 
-- Contract Shader deployed and tested across multiple jobs (create / commit / settle / slash / refund)
-- Full job lifecycle validated on mainnet
-- Dapp UI for end users validated against the live contract on Beam mainnet:
-    - Landing page with three entry points (Start a job, Finish a job, My jobs)
-    - Start a job: file upload with browser-side SHA-256 hashing, URL parameter pre-fill for shared offer links
-    - Finish a job: workers fill in deal terms, hash their deliverable, generate a shareable offer (text + link) for clients
-    - My jobs: localStorage-backed tracking of jobs created from this dapp install, with live status from chain and refund button on expired jobs
+- v2.1 contract deployed at block 3842196 (May 2, 2026)
+- All four Mode B resolution paths verified end to end with real funds
+- Dapp v2.1.4 published, supports both modes via UI
 
-**Working today (with single trusted middleware):**
+**Verified resolution paths (real funds, mainnet):**
 
-- **Fast Settlement (deterministic).** The requester commits a result hash at job creation. The node delivers matching output. A single trusted operator running CLI commands manually triggers settle on the contract. This path validates that the contract logic works end to end. It is not yet trustless because settlement still depends on one party. Additional operators will be brought online as the multi operator middleware is built out.
-
-**In design:**
-
-- **Multi operator middleware.** Replaces the single trusted operator with a small group of independent operators running automated verification scripts. Settlement requires M of N operator signatures. This is what makes Fast Settlement trustless. Phase 1 of the roadmap.
-- **Verification for non deterministic work.** Settlement mechanism for jobs without a predetermined result hash, where output quality is subjective. Currently an open design problem. Phase 3 of the roadmap.
+| Path | Status flow | Job |
+|------|-------------|-----|
+| Mode A hash match | Open → Active → Settled (single tx) | 7777 |
+| Mode B approve | Open → Active → AwaitingApproval → Settled → Closed | 11112, 33335 |
+| Mode B dispute, resolved to worker | Open → Active → AwaitingApproval → Disputed → ResolvedToBob → Closed | 11113 |
+| Mode B dispute, resolved to requester | Open → Active → AwaitingApproval → Disputed → ResolvedToAlice → Closed | 11114 |
+| Mode B timeout | Open → Active → AwaitingApproval → Settled → Closed | 11115 |
 
 ---
 
 ## Contract
 
-Deployed on Beam mainnet:
-
 ```
-CID: 74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027
-Deployed height: 3832296
-Explorer (with parsed actions): https://explorer.0xmx.net/?network=mainnet&type=contract&id=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027
-```
-
-**Actions:**
-
-| Role | Action | Description |
-|------|--------|-------------|
-| `user` | `create` | Lock payment, specify node and result hash |
-| `user` | `commit` | Node locks collateral, job goes Active |
-| `middleware` | `settle` | Release payment + return collateral (job passed) |
-| `middleware` | `slash` | Burn collateral, refund requester (job failed) |
-| `user` | `refund` | Requester reclaims payment after expiry |
-| `user` | `view_job` | Read current job state |
-
-**Job status codes:** 0=Open, 1=Active, 2=Settled, 3=Slashed, 4=Refunded
-
----
-
-## Repo structure
-
-```
-idios_contract.h       Contract Shader header (job struct, method IDs)
-idios_contract.cpp     Contract Shader (on-chain logic, escrow, settle, slash)
-idios_app.cpp          App Shader (wallet-side transaction builder)
-idios_payload.py       IPFS payload delivery (encrypted job specs via Beam private IPFS)
-idios_job.py           Requester end-to-end script (early prototype, watch/settle logic
-                       uses pre-multi-operator architecture)
-idios_consensus.py     Hypertensor consensus integration (early prototype,
-                       pre-multi-operator architecture)
-hypertensor_trigger.py Standalone Hypertensor trigger script (early prototype,
-                       pre-multi-operator architecture)
+CID: f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45
+Deployed at block: 3842196
+Constructor params: default_review_window=10080, arbitrator_timeout_blocks=20160
+Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45
 ```
 
-The three scripts marked early prototype reflect the original Hypertensor consensus integration design. They are kept in the repo as reference but are not part of the current multi operator middleware path. See [Where this is going](#where-this-is-going) for the current architecture.
+### Roles
+
+| Role | Description |
+|------|-------------|
+| `user` | Requester (Alice) or worker (Bob) interacting with the job lifecycle |
+| `arbitrator` | Single on-chain arbitrator (set at deploy) who can resolve disputes |
+| `manager` | Deploy and view contract params (one-shot, used during contract setup) |
+
+### Actions per role
+
+**user actions**
+
+| Action | Description |
+|--------|-------------|
+| `create_a` | Create a Mode A job (Fast Settlement). Locks payment. |
+| `create_b` | Create a Mode B job (Reviewed Settlement). Locks payment, sets review window and dispute fee. |
+| `commit` | Worker locks collateral, status moves to Active. |
+| `submit_delivery` | Worker submits result hash. In Mode A, settles atomically if hash matches. In Mode B, sets AwaitingApproval. |
+| `approve` | Requester approves Mode B delivery, status moves to Settled (no funds yet). |
+| `dispute` | Requester disputes Mode B delivery, locks dispute fee, status moves to Disputed. |
+| `claim_after_timeout` | Worker claims after review window expires (Mode B), status moves to Settled. |
+| `claim` | Beneficiary collects funds from a Settled, ResolvedToBob, or ResolvedToAlice job. Status moves to Closed. |
+| `refund` | Requester reclaims funds from an expired Open job. Status moves to Refunded. |
+| `view_job` | Read current job state. |
+| `get_key` | Returns the user's pubkey for this contract. (Worker shares this with requester before create.) |
+
+**arbitrator actions**
+
+| Action | Description |
+|--------|-------------|
+| `resolve_alice` | Resolve a Disputed job in favour of the requester. Status moves to ResolvedToAlice. |
+| `resolve_bob` | Resolve a Disputed job in favour of the worker. Status moves to ResolvedToBob. |
+| `get_key` | Returns the arbitrator's pubkey for this contract. |
+
+### Status codes
+
+```
+0 = Open               (just created, awaiting worker commit)
+1 = Active             (worker has committed collateral)
+2 = AwaitingApproval   (Mode B, worker has delivered, in review window)
+3 = Disputed           (Mode B, requester has disputed, awaiting arbitrator)
+4 = Settled            (worker can claim payment + collateral)
+5 = Refunded           (terminal, requester reclaimed funds after expiry)
+6 = ResolvedToAlice    (arbitrator sided with requester, requester can claim)
+7 = ResolvedToBob      (arbitrator sided with worker, worker can claim)
+8 = Closed             (terminal, claim has been collected)
+```
 
 ---
 
 ## Quick start (dapp UI)
 
-The simplest way to use Idios today is through the Beam Desktop wallet's dapp store.
+The simplest way to use Idios is through the Beam Desktop wallet's dapp store.
 
 1. Install the Beam Desktop wallet for your platform from [beam.mw](https://beam.mw)
-2. Sync the wallet to mainnet and fund it with a small amount of BEAM for fees (BEAM is available on Kraken, Gate, MEXC, and CoinEx. For DEX trading, [BeamScreener](https://buybeam.my/dashboard/) is a fast community-built dashboard with charts and integrated swap)
-3. Install the Idios dapp from the wallet's DApp Store (or sideload the `.dapp` file)
-4. Open the Idios dapp from your installed apps
+2. Sync to mainnet and fund with a small amount of BEAM. BEAM is on Kraken, Gate, MEXC, CoinEx. For a quick swap from ETH to BEAM without an exchange account, [buybeam.my](https://buybeam.my/) is a community-run service.
+3. Install the Idios dapp from the wallet's DApp Store, or sideload the latest [`.dapp` file from releases](https://github.com/honeytones/idios/releases/latest).
+4. Open Idios from your installed apps.
 
-The dapp opens to a landing page asking what you want to do. From there:
+The dapp opens to a landing page with three entry points:
 
-    Start a job: As a requester, fill in deal terms (job ID, payment, expiry, node pubkey), upload the deliverable file you expect to receive (the dapp computes the SHA-256 hash locally — your file never leaves your device), and create the job. If you arrived via an offer link from a worker, the form auto-fills with their proposed terms.
-    Finish a job: As a worker, fill in the agreed deal terms, upload your finished deliverable, and click Generate Offer. The dapp produces both a shareable text block and a link you can send to the requester via Telegram, email, or any messenger.
-    My jobs: See the live status of every job you've created from this dapp install. Trigger a refund directly from the dashboard for jobs that expired without delivery.
-
-All form fields needed by the contract are covered: job ID, subnet ID, payment amount, expiry block, node public key, and the result hash for deterministic verification. The dapp handles converting BEAM amounts to groth, computes hashes from uploaded files, and surfaces contract state in human-readable form.
+- **Start a job**: As a requester, fill in deal terms (job ID, payment, expiry, worker pubkey). Choose Fast Settlement (upload deliverable file, dapp computes SHA-256 hash locally) or Reviewed Settlement (set review window and dispute fee). Create the job. If you arrived via an offer link from a worker, the form auto-fills.
+- **Generate a job offer**: As a worker, fill in the agreed deal terms, upload your finished deliverable (Mode A) or set review settings (Mode B), and click Generate Offer. Produces a shareable text block and link for sending to the requester.
+- **My jobs**: See live status of every job tracked locally. Action buttons appear conditionally: Refund expired jobs, Approve or Dispute Mode B deliveries, Claim Funds when a job is Settled or Resolved in your favour.
 
 > Note on expiry block: Beam mainnet produces a block roughly every 60 seconds. Set `expiry_block` to at least `current_block + 200` to give the create transaction time to confirm before expiry. For real jobs, `current_block + 1440` (~24 hours) is more typical.
 
 ---
 
-## For developers and operators (CLI)
+## CLI usage
 
-The Beam CLI wallet can drive the contract directly without going through the dapp. This is useful for building middleware, scripting, or any role beyond the requester role exposed in the dapp.
+The Beam CLI wallet drives the contract directly. Useful for scripting, building integrations, or any role beyond what the dapp exposes.
 
 ### Prerequisites
 
 - Beam CLI wallet binary, available from the [Beam releases page](https://github.com/BeamMW/beam/releases)
-- A copy of `idios_app.wasm` (downloadable from this repo or built from source)
-- A Beam mainnet node to connect to (run your own, or use a public node like `eu-node01.mainnet.beam.mw:8100`)
+- A copy of `idios_app.wasm` (downloadable from this repo or built from source, see [Build](#build))
+- A Beam mainnet node to connect to. Run your own, or use a public node like `eu-node01.mainnet.beam.mw:8100`.
+
+All examples use `cid=f40eb64d...` (v2.1) and a public node. Substitute your own as needed.
+
+### Get worker pubkey for this contract
+
+The worker's pubkey is contract-specific (because the CID is part of the key derivation). Before any create, the worker runs:
+
+```bash
+./beam-wallet shader \
+  --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=get_key,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+```
+
+The output is the worker's `node_pk` for that contract. Send this to the requester.
 
 ### View a job
 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=view_job,cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,job_id=<N>" \
+  --shader_args="role=user,action=view_job,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-### Create a job (requester)
+### Create a Mode A job (Fast Settlement)
 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=create,cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE_BLOCK>,payment=<GROTH>,asset_id=0,node_pk=<NODE_PUBKEY>,result_hash=<HASH_HEX>" \
+  --shader_args="role=user,action=create_a,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,payment=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>,result_hash=<HASH>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
 Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` is 0.05 BEAM.
 
-### Commit collateral (node)
+### Create a Mode B job (Reviewed Settlement)
 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=commit,cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,job_id=<N>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=create_b,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,review_window_blocks=<N>,payment=<GROTH>,dispute_fee=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-### Refund a job (requester, after expiry)
+### Commit collateral (worker)
 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=refund,cid=74c497b7fe906c09e0da91d1a5e43b2afe122b1a6af3ae74c9440259d6f27027,job_id=<N>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=commit,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,collateral=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-The payment, collateral, and asset_id values must match the job's actual stored values. View the job first to read them.
+### Submit delivery (worker)
+
+```bash
+./beam-wallet shader \
+  --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=submit_delivery,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,delivery_hash=<HASH>,mode=<65|66>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+```
+
+`mode=65` for Mode A (ASCII 'A'), `mode=66` for Mode B (ASCII 'B').
+
+### Mode B: approve, dispute, claim_after_timeout
+
+```bash
+# Requester approves
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=approve,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+
+# Requester disputes
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=dispute,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,dispute_fee=<GROTH>,asset_id=0" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+
+# Worker claims after review window expires
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=claim_after_timeout,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+```
+
+### Arbitrator: resolve a dispute
+
+The arbitrator wallet is the one that originally deployed the contract.
+
+```bash
+# Resolve in favour of requester
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=arbitrator,action=resolve_alice,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+
+# Resolve in favour of worker
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=arbitrator,action=resolve_bob,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+```
+
+### Claim funds (beneficiary)
+
+After Settled, ResolvedToBob, or ResolvedToAlice, the beneficiary calls `claim`. Total is the full payout amount. For Settled it's payment + collateral. For Resolved* it's payment + collateral + dispute_fee.
+
+```bash
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=claim,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,total=<GROTH>,asset_id=0" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+```
+
+### Refund (requester, after expiry)
+
+For an Open job whose `expiry_block` has passed without anyone committing.
+
+```bash
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=refund,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+```
 
 ---
 
-## Running an operator node
+## Repo structure
 
-The multi operator verification network is currently in early development. The basic shape will be:
-
-- Operators run a Beam node and CLI wallet on a machine with reasonable uptime
-- A small Python script watches the contract for jobs ready for verification
-- For deterministic jobs, the script automatically compares hashes and signs settle or slash decisions
-- Operators coordinate via Beam's SBBS messaging layer to collect the required signatures
-- Settlement requires multiple operator signatures, enforced at the contract level
-
-If you are interested in running an operator node, open an issue on this repo or reach out directly. The first phase is recruiting a small group of operators to validate the design before opening it more broadly.
+```
+idios_contract.h       Contract Shader header (job struct, status enum, method IDs)
+idios_contract.cpp     Contract Shader (on chain logic, escrow, claim, dispute resolution)
+idios_app.cpp          App Shader (wallet-side transaction builder)
+idios_contract.wasm    Compiled contract (loaded on chain at deploy)
+idios_app.wasm         Compiled app shader (used by wallet to construct kernels)
+build_v2.sh            Build script
+idios-dapp-src/        Mirror of the dapp source (BeamMW template fork)
+```
 
 ---
 
-## Build from source
+## Build
 
 The contract and app shaders are written in C++ and built with the Beam Shader SDK.
 
 ```bash
-# Rebuild contract shader
-cd ~/shader-sdk/build/wasi && ninja idios_contract
-
-# Rebuild app shader
-cd ~/shader-sdk/build/wasi && ninja idios_app
+bash build_v2.sh
 ```
 
-Source files live in `~/shader-sdk/shaders/idios/`. After building, copy the resulting `.wasm` files to wherever your tooling expects them.
-
----
-
-## Token dynamics
-
-TENSOR and BEAM serve completely different functions and one strengthens the other.
-
-TENSOR governs Hypertensor staking, node scoring, emissions, subnet participation. None of that changes with Idios. Nodes still earn TENSOR emissions through Hypertensor consensus.
-
-What Idios adds is a separate private settlement layer for individual job payments. A requester deposits BEAM into escrow. When operators verify the work and reach agreement, payment releases privately to the node. Two separate reward streams, neither cannibalising the other.
-
-Private settlement expands the addressable market for Hypertensor subnets enterprise clients and regulated industries that can't use a subnet with public payment records become viable customers. More demand for subnet capacity means more demand for TENSOR staking.
+Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 ---
 
 ## Architecture notes
 
-**No bridge, no cross-chain protocol.** Beam and Hypertensor never communicate. The middleware is the only connection a lightweight Python process running alongside the node operator's existing stack.
+**Two phase claim.** Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the job status. The beneficiary then calls Method_15 Claim signed with their own key to actually receive the funds. This works around a Beam BVM constraint where one kernel can't cleanly sign for one party while routing funds to a different party.
 
-**Key derivation.** The middleware key is derived from the contract ID with a different context byte than user/node keys, so it can never be confused with a user key. Both use `Env::DerivePk` in the App Shader and `Env::AddSig` in the Contract Shader native Beam multisig, not custom signatures.
+**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). M of N multi-arbitrator resolution is Phase 1 of the roadmap.
 
-**Settlement trigger design is open.** The Beam contract itself enforces the rules (escrow, expiry, multi sig). What triggers settle or slash for open ended jobs is a consensus problem that lives outside the contract. The current single operator middleware works for deterministic jobs via result hash matching. For non deterministic jobs, the design path is to build a multi operator middleware that reaches agreement among peers first, then integrate that mechanism as a Hypertensor subnet once the network is live.
+**Contract-specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
 
-**Settle/slash args are explicit.** `VarReader::Read_T` in the App Shader transaction context doesn't reliably find contract vars. Payment, collateral, and asset_id are passed explicitly and validated by the contract.
+**Refund semantics.** `refund` only works for jobs that never had a worker commit (status=Open) and whose `expiry_block` has passed. Once a worker has committed, refund is no longer available. The job must complete one of the resolution paths instead.
+
+**No bridge, no cross chain.** Idios runs entirely on Beam mainnet. No wrapped assets, no second chain.
 
 ---
 
 ## Roadmap
 
-**Phase 1: Multi operator middleware (active)**
+**Phase 1: Multi-arbitrator dispute resolution**
 
-- [ ] Multi operator keys recognised by the Beam contract
-- [ ] M of N signature requirement for settle and slash
-- [ ] Automated verification scripts running on operator machines
-- [ ] Operator coordination via Beam SBBS messaging
-- [ ] First working multi operator settlement on mainnet for a deterministic job
+- [ ] Multi-arbitrator key registry in the contract
+- [ ] M of N signature requirement on resolve_alice and resolve_bob
+- [ ] Coordination layer for arbitrators to communicate (Beam SBBS or compatible)
+- [ ] First multi-arbitrator dispute resolution on mainnet
 
-**Phase 2: Job delivery and operator network growth**
+**Phase 2: Payload delivery**
 
-- [ ] Job specifications sent between requesters and nodes via Beam SBBS or compatible messaging
-- [ ] IPFS payload delivery via Beam's private IPFS network for larger work files
-- [ ] Encrypted payloads with keys exchanged through the messaging layer
-- [ ] Recruit operators beyond the initial small group
-- [ ] Operator staking and reputation tracking
+- [ ] Job specifications and deliverables sent via IPFS through Beam's private IPFS network
+- [ ] Encrypted payloads with keys exchanged out of band
+- [ ] Larger work files supported beyond what fits in a hash
 
-**Phase 3: Verification beyond deterministic jobs**
+**Phase 3: Verification beyond deterministic and human review**
 
-- [ ] Verification design for non deterministic work
-- [ ] Operator economics tuned from real network usage data
-- [ ] Public operator directory with quality metrics
-
-**Phase 4: Hypertensor subnet integration**
-
-- [ ] Wrap the multi operator middleware as a Hypertensor subnet (gated on Hypertensor mainnet)
-- [ ] Operators participate in Hypertensor epoch consensus and earn subnet rewards
-- [ ] DHT heartbeat field for nodes to broadcast Beam pubkeys
-- [ ] Migration path from standalone operator network to subnet membership
+- [ ] Programmatic verifiers for specific job classes (numerical bounds, schema match, etc)
+- [ ] Public verifier directory
+- [ ] Verifier reputation tracking
 
 **Other directions under consideration**
 
-- [ ] Asset support beyond BEAM (specifically Nephrite, asset_id=47)
-- [ ] Additional target networks (Bittensor, Akash, others where private payment for compute is valuable)
-- [ ] Native dapp support for Epoch Settlement once the trigger architecture is finalised
+- [ ] Asset support beyond BEAM (Nephrite asset_id=47 etc)
+- [ ] Native dapp arbitrator dashboard
 
 ---
 
 ## Contributing
 
-Idios is early and moving fast. If you're building on Hypertensor or Beam and want to integrate, open an issue or reach out directly.
+Idios is early and moving fast. If you're building on Beam and want to integrate, open an issue or reach out directly.
 
 Built by the community, for the community.
