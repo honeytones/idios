@@ -351,7 +351,7 @@ void On_arbitrator_resolve_alice(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::ResolveToAlice::s_iMethod,
         &args, sizeof(args), nullptr, 0, &sigKid, 1,
-        "Idios: resolve dispute to Alice", 0);
+        "Idios: resolve dispute to Alice", 200000);
 }
 
 // ----------------------------------------------------------------
@@ -369,7 +369,7 @@ void On_arbitrator_resolve_bob(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::ResolveToBob::s_iMethod,
         &args, sizeof(args), nullptr, 0, &sigKid, 1,
-        "Idios: resolve dispute to Bob", 0);
+        "Idios: resolve dispute to Bob", 200000);
 }
 
 // ----------------------------------------------------------------
