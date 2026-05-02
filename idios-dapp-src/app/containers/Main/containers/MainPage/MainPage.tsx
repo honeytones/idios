@@ -324,7 +324,7 @@ const MainPage: React.FC = () => {
   const [expiryBlock, setExpiryBlock] = useState('');
   const [resultHash, setResultHash] = useState('');
   const [reviewWindow, setReviewWindow] = useState('100');
-  const [disputeFee, setDisputeFee] = useState('1');
+  const [disputeFee, setDisputeFee] = useState('0.01');
   const [status, setStatus] = useState('');
   const [isError, setIsError] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -337,17 +337,23 @@ const MainPage: React.FC = () => {
   const [offerFrom, setOfferFrom] = useState('');
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const m = params.get('mode');
     const p = params.get('payment');
     const h = params.get('hash');
     const w = params.get('worker');
     const ex = params.get('expiry');
     const sub = params.get('subnet');
     const fr = params.get('from');
+    const rw = params.get('window');
+    const df = params.get('disputeFee');
+    if (m === 'review') setSettlement('review');
     if (p) setPayment(p);
     if (h) setResultHash(h);
     if (w) setNodePk(w);
     if (ex) setExpiryBlock(ex);
     if (fr) setOfferFrom(fr);
+    if (rw) setReviewWindow(rw);
+    if (df) setDisputeFee(df);
     // subnet param reserved for future use
   }, []);
 
@@ -616,7 +622,7 @@ const MainPage: React.FC = () => {
             </div>
             <div>
               <Label>Dispute Fee (BEAM)</Label>
-              <Input placeholder="e.g. 1" value={disputeFee} onChange={e => setDisputeFee(e.target.value)} />
+              <Input placeholder="e.g. 0.01" value={disputeFee} onChange={e => setDisputeFee(e.target.value)} />
               <HintText>Locked if you dispute. Refunded if arbitrator sides with you, paid to worker if not.</HintText>
             </div>
           </Row>

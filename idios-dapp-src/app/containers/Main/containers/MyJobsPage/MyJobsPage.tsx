@@ -344,7 +344,11 @@ const MyJobsPage: React.FC = () => {
                 {refundingId === job.jobId ? 'Refunding...' : 'Trigger Refund'}
               </ActionButton>
             )}
-            {job.state && (job.state.status === 4 || job.state.status === 6 || job.state.status === 7) && (
+            {job.state && (
+              (job.state.status === 4 && job.role === 'worker') ||
+              (job.state.status === 7 && job.role === 'worker') ||
+              (job.state.status === 6 && job.role === 'requester')
+            ) && (
               <ActionButton
                 onClick={() => handleClaim(job)}
                 disabled={claimingId === job.jobId}

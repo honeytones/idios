@@ -214,13 +214,48 @@ const ErrorMsg = styled.div`
   margin-bottom: 12px;
 `;
 
+const SettlementOptions = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+`;
+
+const SettlementCard = styled.div<{ selected: boolean }>`
+  padding: 16px;
+  border-radius: 10px;
+  border: 2px solid ${({ selected }) => selected ? '#e8e8e8' : 'rgba(255,255,255,0.1)'};
+  background: ${({ selected }) => selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)'};
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover {
+    border-color: rgba(255,255,255,0.5);
+  }
+`;
+
+const CardTitle = styled.div`
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: white;
+`;
+
+const CardDesc = styled.div`
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.5;
+`;
+
 const FinishJobPage: React.FC = () => {
   const navigate = useNavigate();
 
+  const [settlement, setSettlement] = useState<'fast' | 'review'>('fast');
   const [description, setDescription] = useState('');
   const [payment, setPayment] = useState('');
   const [collateral, setCollateral] = useState('');
   const [expiryBlock, setExpiryBlock] = useState('');
+  const [reviewWindow, setReviewWindow] = useState('100');
+  const [disputeFee, setDisputeFee] = useState('0.01');
   const [requesterAddr, setRequesterAddr] = useState('');
   const [myAddr, setMyAddr] = useState('');
   const [resultHash, setResultHash] = useState('');
@@ -258,11 +293,12 @@ const FinishJobPage: React.FC = () => {
 
   const isValid =
     payment.length > 0 &&
-    collateral.length > 0 &&
     expiryBlock.length > 0 &&
     requesterAddr.length >= 60 &&
     myAddr.length >= 60 &&
-    resultHash.length === 64;
+    (settlement === 'fast'
+      ? (collateral.length > 0 && resultHash.length === 64)
+      : (reviewWindow.length > 0 && disputeFee.length > 0));
 
   const handleGenerate = () => {
     if (!isValid) {
@@ -272,37 +308,53 @@ const FinishJobPage: React.FC = () => {
     setErrorMsg('');
 
     const params = new URLSearchParams();
+    params.set('mode', settlement);
     params.set('payment', payment);
-    params.set('hash', resultHash);
     params.set('worker', myAddr);
     params.set('expiry', expiryBlock);
     params.set('from', myAddr);
+    if (settlement === 'fast') {
+      params.set('hash', resultHash);
+    } else {
+      params.set('window', reviewWindow);
+      params.set('disputeFee', disputeFee);
+    }
 
     const link = window.location.origin + window.location.pathname + '?' + params.toString();
     setOfferLink(link);
 
-    const text = [
+    const settlementLabel = settlement === 'fast' ? 'Fast Settlement (Mode A)' : 'Reviewed Settlement (Mode B)';
+    const lines = [
       '== Idios Job Offer ==',
       '',
       'Description: ' + (description || '(none)'),
+      'Settlement: ' + settlementLabel,
       'Payment: ' + payment + ' BEAM',
-      'Collateral: ' + collateral + ' BEAM',
-      'Expiry block: ' + expiryBlock,
-      '',
-      'Worker (me): ' + myAddr,
-      'Requester (you): ' + requesterAddr,
-      'Result hash: ' + resultHash,
-      '',
-      'To accept this offer:',
-      '1. Open Idios in your Beam wallet',
-      '2. Click "Start a job"',
-      '3. Paste these values into the form',
-      '4. Click Create Job',
-      '',
-      'Or paste this link into the URL bar of your Idios dapp:',
-      link,
-    ].join('\n');
-    setOfferText(text);
+    ];
+    if (settlement === 'fast') {
+      lines.push('Collateral: ' + collateral + ' BEAM');
+    }
+    lines.push('Expiry block: ' + expiryBlock);
+    if (settlement === 'review') {
+      lines.push('Review window: ' + reviewWindow + ' blocks');
+      lines.push('Dispute fee: ' + disputeFee + ' BEAM');
+    }
+    lines.push('');
+    lines.push('Worker (me): ' + myAddr);
+    lines.push('Requester (you): ' + requesterAddr);
+    if (settlement === 'fast') {
+      lines.push('Result hash: ' + resultHash);
+    }
+    lines.push('');
+    lines.push('To accept this offer:');
+    lines.push('1. Open Idios in your Beam wallet');
+    lines.push('2. Click "Start a job"');
+    lines.push('3. Paste these values into the form');
+    lines.push('4. Click Create Job');
+    lines.push('');
+    lines.push('Or paste this link into the URL bar of your Idios dapp:');
+    lines.push(link);
+    setOfferText(lines.join('\n'));
   };
 
   const copyToClipboard = (text: string, which: 'link' | 'text') => {
@@ -321,6 +373,20 @@ const FinishJobPage: React.FC = () => {
     <Container>
       <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
 
+      <Section>
+        <SectionTitle>Settlement Type</SectionTitle>
+        <SettlementOptions>
+          <SettlementCard selected={settlement === 'fast'} onClick={() => setSettlement('fast')}>
+            <CardTitle>Fast Settlement</CardTitle>
+            <CardDesc>Settles immediately when you deliver matching result hash. Best for deterministic tasks.</CardDesc>
+          </SettlementCard>
+          <SettlementCard selected={settlement === 'review'} onClick={() => setSettlement('review')}>
+            <CardTitle>Reviewed Settlement</CardTitle>
+            <CardDesc>Client reviews work and approves, with arbitrator backstop. Best for non deterministic or open ended tasks.</CardDesc>
+          </SettlementCard>
+        </SettlementOptions>
+      </Section>
+
       <TwoColumn>
       <div>
       <Section>
@@ -333,10 +399,12 @@ const FinishJobPage: React.FC = () => {
             <Label>Payment (BEAM)</Label>
             <Input placeholder="e.g. 12" value={payment} onChange={e => handlePaymentChange(e.target.value)} />
           </div>
-          <div>
-            <Label>Collateral (BEAM)</Label>
-            <Input placeholder="Auto: 50% of payment" value={collateral} onChange={e => setCollateral(e.target.value)} />
-          </div>
+          {settlement === 'fast' && (
+            <div>
+              <Label>Collateral (BEAM)</Label>
+              <Input placeholder="Auto: 50% of payment" value={collateral} onChange={e => setCollateral(e.target.value)} />
+            </div>
+          )}
         </Row>
 
         <Label>Expiry Block</Label>
@@ -354,23 +422,42 @@ const FinishJobPage: React.FC = () => {
 
       </div>
       <div>
-      <Section>
-        <SectionTitle>Deliverable</SectionTitle>
-        <Label>Upload your finished file (computes hash automatically)</Label>
-        <FileInputWrapper>
-          {isHashing
-            ? 'Hashing file...'
-            : uploadedFileName
-              ? 'Loaded: ' + uploadedFileName
-              : 'Click to select a file'}
-          <input type="file" onChange={handleFileUpload} disabled={isHashing} />
-        </FileInputWrapper>
-        {uploadedFileName && !isHashing && (
-          <FileStatus>Hash computed locally. File never leaves your device.</FileStatus>
-        )}
-        <Label>Result hash (auto-generated from upload)</Label>
-        <Input placeholder="64 char hex hash" value={resultHash} onChange={e => setResultHash(e.target.value)} />
-      </Section>
+      {settlement === 'fast' && (
+        <Section>
+          <SectionTitle>Deliverable</SectionTitle>
+          <Label>Upload your finished file (computes hash automatically)</Label>
+          <FileInputWrapper>
+            {isHashing
+              ? 'Hashing file...'
+              : uploadedFileName
+                ? 'Loaded: ' + uploadedFileName
+                : 'Click to select a file'}
+            <input type="file" onChange={handleFileUpload} disabled={isHashing} />
+          </FileInputWrapper>
+          {uploadedFileName && !isHashing && (
+            <FileStatus>Hash computed locally. File never leaves your device.</FileStatus>
+          )}
+          <Label>Result hash (auto-generated from upload)</Label>
+          <Input placeholder="64 char hex hash" value={resultHash} onChange={e => setResultHash(e.target.value)} />
+        </Section>
+      )}
+      {settlement === 'review' && (
+        <Section>
+          <SectionTitle>Review Settings</SectionTitle>
+          <Row>
+            <div>
+              <Label>Review Window (blocks)</Label>
+              <Input placeholder="e.g. 100" value={reviewWindow} onChange={e => setReviewWindow(e.target.value)} />
+              <HintText>Time client has to approve or dispute after delivery. 100 blocks is roughly 100 minutes.</HintText>
+            </div>
+            <div>
+              <Label>Dispute Fee (BEAM)</Label>
+              <Input placeholder="e.g. 0.01" value={disputeFee} onChange={e => setDisputeFee(e.target.value)} />
+              <HintText>Locked by client if they dispute. Refunded if arbitrator sides with them, paid to you if not.</HintText>
+            </div>
+          </Row>
+        </Section>
+      )}
       </div>
       </TwoColumn>
 
