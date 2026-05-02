@@ -1,6 +1,6 @@
 import Utils from '@core/utils.js';
 
-const CID = '123a77c4ed920a7b0d81dbe08829338d888cfe23d22c19dbc435808e282f20f5';
+const CID = 'f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45';
 const SHADER_URL = './amm.wasm';
 
 let shader = null;
