@@ -84,12 +84,12 @@ const LandingPage: React.FC = () => {
         <CardDesc>Set up a private job with payment locked in escrow.</CardDesc>
       </Card>
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.FINISH)}>
-        <CardTitle>Finish a job</CardTitle>
-        <CardDesc>Submit completed work. Lock collateral and get paid when verified.</CardDesc>
+        <CardTitle>Generate a job offer</CardTitle>
+        <CardDesc>Send a payment request to a client. They open your link to lock funds in escrow.</CardDesc>
       </Card>
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.MY_JOBS)}>
         <CardTitle>My jobs</CardTitle>
-        <CardDesc>Track jobs you've created or accepted. Refund expired jobs.</CardDesc>
+        <CardDesc>Track jobs you've created or accepted. Approve work, dispute, claim funds, or refund.</CardDesc>
       </Card>
     </Container>
   );

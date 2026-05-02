@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { styled } from '@linaria/react';
 import { ROUTES_PATH, ROUTES_FULL } from '@app/shared/constants';
-import { getTrackedJobs, removeTrackedJob, TrackedJob } from '@app/core/jobs';
+import { getTrackedJobs, removeTrackedJob, addTrackedJob, TrackedJob } from '@app/core/jobs';
 import { viewJob, refundJob, claimJob, approveJob, disputeJob } from '@app/core/api';
 
 const Container = styled.div`
@@ -62,6 +62,78 @@ const RefreshButton = styled.button`
   &:hover {
     border-color: #e8e8e8;
     color: #e8e8e8;
+  }
+`;
+
+const TrackForm = styled.div`
+  width: 100%;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.04);
+  margin-bottom: 16px;
+  box-sizing: border-box;
+`;
+
+const TrackFormTitle = styled.div`
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+`;
+
+const TrackFormRow = styled.div`
+  display: flex;
+  gap: 8px;
+  align-items: center;
+`;
+
+const TrackInput = styled.input`
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: white;
+  font-size: 13px;
+  outline: none;
+  &:focus {
+    border-color: #e8e8e8;
+  }
+  &::placeholder {
+    color: rgba(255,255,255,0.3);
+  }
+`;
+
+const TrackSelect = styled.select`
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: white;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  &:focus {
+    border-color: #e8e8e8;
+  }
+`;
+
+const TrackButton = styled.button`
+  padding: 10px 18px;
+  border-radius: 6px;
+  border: 1px solid #e8e8e8;
+  background: #e8e8e8;
+  color: #042548;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 `;
 
@@ -190,6 +262,8 @@ const MyJobsPage: React.FC = () => {
   const [jobs, setJobs] = useState<JobWithState[]>([]);
   const [loading, setLoading] = useState(true);
   const [refundingId, setRefundingId] = useState<number | null>(null);
+  const [trackJobId, setTrackJobId] = useState('');
+  const [trackRole, setTrackRole] = useState<'requester' | 'worker'>('worker');
   const [claimingId, setClaimingId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [disputingId, setDisputingId] = useState<number | null>(null);
@@ -261,6 +335,18 @@ const MyJobsPage: React.FC = () => {
     }
   };
 
+  const handleAddTrack = () => {
+    const id = parseInt(trackJobId);
+    if (!id || isNaN(id)) return;
+    addTrackedJob({
+      jobId: id,
+      role: trackRole,
+      addedAt: Date.now(),
+    });
+    setTrackJobId('');
+    loadJobs();
+  };
+
   const handleApprove = async (job: JobWithState) => {
     if (!job.state) return;
     setApprovingId(job.jobId);
@@ -305,6 +391,24 @@ const MyJobsPage: React.FC = () => {
       <RefreshButton onClick={loadJobs} disabled={loading}>
         {loading ? 'Refreshing...' : 'Refresh'}
       </RefreshButton>
+
+      <TrackForm>
+        <TrackFormTitle>Track a Job</TrackFormTitle>
+        <TrackFormRow>
+          <TrackInput
+            placeholder="Job ID, e.g. 33335"
+            value={trackJobId}
+            onChange={e => setTrackJobId(e.target.value)}
+          />
+          <TrackSelect value={trackRole} onChange={e => setTrackRole(e.target.value as 'requester' | 'worker')}>
+            <option value="worker">As Worker (Bob)</option>
+            <option value="requester">As Requester (Alice)</option>
+          </TrackSelect>
+          <TrackButton onClick={handleAddTrack} disabled={!trackJobId}>
+            Add
+          </TrackButton>
+        </TrackFormRow>
+      </TrackForm>
 
       {loading && jobs.length === 0 && <LoadingMsg>Loading jobs...</LoadingMsg>}
 
