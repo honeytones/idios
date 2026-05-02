@@ -103,6 +103,14 @@ export async function refundJob(job_id, payment, collateral, asset_id = 0) {
     });
 }
 
+export async function claimJob(job_id, total) {
+    await loadShader();
+    return new Promise((resolve, reject) => {
+        const args = `role=user,action=claim,cid=${CID},job_id=${job_id},total=${total},asset_id=0`;
+        invokeContract(args, resolve, reject);
+    });
+}
+
 export async function viewJob(job_id) {
     await loadShader();
     return new Promise((resolve, reject) => {

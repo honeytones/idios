@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ROUTES_FULL } from '@app/shared/constants';
 import { styled } from '@linaria/react';
 import { useNavigate } from 'react-router-dom';
-import { createJob, viewJob, refundJob } from '@app/core/api';
+import { createJobModeA, createJobModeB, viewJob, refundJob } from '@app/core/api';
 import { addTrackedJob } from '@app/core/jobs';
 async function hashFileSHA256(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
@@ -316,13 +316,15 @@ const Divider = styled.div`
 
 const MainPage: React.FC = () => {
   const navigate = useNavigate();
-  const [settlement, setSettlement] = useState<'fast' | 'epoch'>('fast');
+  const [settlement, setSettlement] = useState<'fast' | 'review'>('fast');
   const [jobId, setJobId] = useState('');
   const [nodePk, setNodePk] = useState('');
   const [payment, setPayment] = useState('');
   const [collateral, setCollateral] = useState('');
   const [expiryBlock, setExpiryBlock] = useState('');
   const [resultHash, setResultHash] = useState('');
+  const [reviewWindow, setReviewWindow] = useState('100');
+  const [disputeFee, setDisputeFee] = useState('1');
   const [status, setStatus] = useState('');
   const [isError, setIsError] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -422,16 +424,27 @@ const MainPage: React.FC = () => {
       }
 
       const paymentGroth = beamToGroth(payment);
-      const hash = settlement === 'fast' ? resultHash : '0'.repeat(64);
 
-      setStatus('Creating job — please approve in your Beam wallet...');
-      await createJob(
-        parseInt(jobId),
-        nodePk,
-        hash,
-        paymentGroth,
-        parseInt(expiryBlock)
-      );
+      setStatus('Creating job, please approve in your Beam wallet.');
+      if (settlement === 'fast') {
+        await createJobModeA(
+          parseInt(jobId),
+          nodePk,
+          resultHash,
+          paymentGroth,
+          parseInt(expiryBlock)
+        );
+      } else {
+        const disputeFeeGroth = beamToGroth(disputeFee);
+        await createJobModeB(
+          parseInt(jobId),
+          nodePk,
+          paymentGroth,
+          disputeFeeGroth,
+          parseInt(expiryBlock),
+          parseInt(reviewWindow)
+        );
+      }
       // Track this job locally for "My Jobs" view
       try {
         addTrackedJob({
@@ -439,7 +452,7 @@ const MainPage: React.FC = () => {
           role: 'requester',
           addedAt: Date.now(),
           payment: payment,
-          resultHash: hash,
+          resultHash: settlement === 'fast' ? resultHash : '',
         });
       } catch (err) {
         console.error('Could not track job:', err);
@@ -499,7 +512,7 @@ const MainPage: React.FC = () => {
   };
 
   const isValid = jobId && nodePk && payment && expiryBlock &&
-    (settlement === 'epoch' || resultHash);
+    (settlement === 'fast' ? resultHash : (reviewWindow && disputeFee));
 
   const renderJobInfo = () => {
     if (!jobInfo) return null;
@@ -540,12 +553,12 @@ const MainPage: React.FC = () => {
         <SectionTitle>Settlement Type</SectionTitle>
         <SettlementOptions>
           <SettlementCard selected={settlement === 'fast'} onClick={() => setSettlement('fast')}>
-            <CardTitle>⚡ Fast Settlement</CardTitle>
+            <CardTitle>Fast Settlement</CardTitle>
             <CardDesc>Settles immediately when node delivers matching result hash. Best for deterministic tasks.</CardDesc>
           </SettlementCard>
-          <SettlementCard selected={false} onClick={() => {}} style={{opacity: 0.5, cursor: 'not-allowed'}}>
-            <CardTitle>🔒 Epoch Settlement (coming soon)</CardTitle>
-            <CardDesc>Multi operator verification for open ended jobs. Coming soon.</CardDesc>
+          <SettlementCard selected={settlement === 'review'} onClick={() => setSettlement('review')}>
+            <CardTitle>Reviewed Settlement</CardTitle>
+            <CardDesc>You review the work and approve, with arbitrator backstop if you dispute. Best for non deterministic or open ended tasks.</CardDesc>
           </SettlementCard>
         </SettlementOptions>
       </Section>
@@ -590,6 +603,23 @@ const MainPage: React.FC = () => {
           <Label>Expected Result Hash</Label>
           <Input placeholder="64 char hex hash of expected output" value={resultHash} onChange={e => setResultHash(e.target.value)} />
           <HintText>SHA256 hash of the deliverable. Either upload above or paste a hash directly.</HintText>
+        </Section>
+      )}
+      {settlement === 'review' && (
+        <Section>
+          <SectionTitle>Review Settings</SectionTitle>
+          <Row>
+            <div>
+              <Label>Review Window (blocks)</Label>
+              <Input placeholder="e.g. 100" value={reviewWindow} onChange={e => setReviewWindow(e.target.value)} />
+              <HintText>Time you have to approve or dispute after delivery. 100 blocks is approximately 100 minutes.</HintText>
+            </div>
+            <div>
+              <Label>Dispute Fee (BEAM)</Label>
+              <Input placeholder="e.g. 1" value={disputeFee} onChange={e => setDisputeFee(e.target.value)} />
+              <HintText>Locked if you dispute. Refunded if arbitrator sides with you, paid to worker if not.</HintText>
+            </div>
+          </Row>
         </Section>
       )}
       </TwoColumn>

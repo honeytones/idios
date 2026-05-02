@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { styled } from '@linaria/react';
 import { ROUTES_PATH, ROUTES_FULL } from '@app/shared/constants';
 import { getTrackedJobs, removeTrackedJob, TrackedJob } from '@app/core/jobs';
-import { viewJob, refundJob } from '@app/core/api';
+import { viewJob, refundJob, claimJob, approveJob, disputeJob } from '@app/core/api';
 
 const Container = styled.div`
   display: flex;
@@ -167,11 +167,15 @@ interface JobWithState extends TrackedJob {
 
 const statusToText = (status: number | undefined): string => {
   switch (status) {
-    case 0: return 'Awaiting Collateral';
-    case 1: return 'In Progress';
-    case 2: return 'Settled';
-    case 3: return 'Slashed';
-    case 4: return 'Refunded';
+    case 0: return 'Open';
+    case 1: return 'Active';
+    case 2: return 'Awaiting Approval';
+    case 3: return 'Disputed';
+    case 4: return 'Settled';
+    case 5: return 'Refunded';
+    case 6: return 'Resolved to Requester';
+    case 7: return 'Resolved to Worker';
+    case 8: return 'Closed';
     default: return 'Unknown';
   }
 };
@@ -186,6 +190,9 @@ const MyJobsPage: React.FC = () => {
   const [jobs, setJobs] = useState<JobWithState[]>([]);
   const [loading, setLoading] = useState(true);
   const [refundingId, setRefundingId] = useState<number | null>(null);
+  const [claimingId, setClaimingId] = useState<number | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [disputingId, setDisputingId] = useState<number | null>(null);
 
   const loadJobs = async () => {
     setLoading(true);
@@ -230,6 +237,58 @@ const MyJobsPage: React.FC = () => {
       alert('Refund failed. See console for details.');
     } finally {
       setRefundingId(null);
+    }
+  };
+
+  const handleClaim = async (job: JobWithState) => {
+    if (!job.state) return;
+    setClaimingId(job.jobId);
+    try {
+      const payment = job.state.payment || 0;
+      const collateral = job.state.collateral || 0;
+      const dispute_fee = job.state.dispute_fee || 0;
+      let total = payment + collateral;
+      if (job.state.status === 6 || job.state.status === 7) {
+        total += dispute_fee;
+      }
+      await claimJob(job.jobId, total);
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Claim failed:', err);
+      alert('Claim failed. See console for details.');
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
+  const handleApprove = async (job: JobWithState) => {
+    if (!job.state) return;
+    setApprovingId(job.jobId);
+    try {
+      const payment = job.state.payment || 0;
+      const collateral = job.state.collateral || 0;
+      await approveJob(job.jobId, payment, collateral);
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Approve failed:', err);
+      alert('Approve failed. See console for details.');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const handleDispute = async (job: JobWithState) => {
+    if (!job.state) return;
+    setDisputingId(job.jobId);
+    try {
+      const dispute_fee = job.state.dispute_fee || 0;
+      await disputeJob(job.jobId, dispute_fee);
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Dispute failed:', err);
+      alert('Dispute failed. See console for details.');
+    } finally {
+      setDisputingId(null);
     }
   };
 
@@ -284,6 +343,30 @@ const MyJobsPage: React.FC = () => {
               >
                 {refundingId === job.jobId ? 'Refunding...' : 'Trigger Refund'}
               </ActionButton>
+            )}
+            {job.state && (job.state.status === 4 || job.state.status === 6 || job.state.status === 7) && (
+              <ActionButton
+                onClick={() => handleClaim(job)}
+                disabled={claimingId === job.jobId}
+              >
+                {claimingId === job.jobId ? 'Claiming...' : 'Claim Funds'}
+              </ActionButton>
+            )}
+            {job.state && job.state.status === 2 && job.role === 'requester' && (
+              <>
+                <ActionButton
+                  onClick={() => handleApprove(job)}
+                  disabled={approvingId === job.jobId}
+                >
+                  {approvingId === job.jobId ? 'Approving...' : 'Approve Delivery'}
+                </ActionButton>
+                <ActionButton
+                  onClick={() => handleDispute(job)}
+                  disabled={disputingId === job.jobId}
+                >
+                  {disputingId === job.jobId ? 'Disputing...' : 'Dispute Delivery'}
+                </ActionButton>
+              </>
             )}
             <RemoveButton onClick={() => handleRemove(job.jobId)}>
               Stop tracking
