@@ -129,6 +129,24 @@ export async function viewJob(job_id) {
     });
 }
 
+export async function getUserKey() {
+    await loadShader();
+    return new Promise((resolve, reject) => {
+        const args = `role=user,action=get_key,cid=${CID}`;
+        Utils.invokeContract(args, (err, result, full) => {
+            try {
+                const raw = full && full.result && full.result.output;
+                if (raw) {
+                    const parsed = JSON.parse('{' + raw + '}');
+                    const pk = parsed.key && parsed.key.pub_key;
+                    if (pk) return resolve(pk);
+                }
+            } catch(e) {}
+            if (err) return reject(new Error(JSON.stringify(err)));
+            resolve(result);
+        }, shader);
+    });
+}
 export async function resolveToAlice(job_id, total) {
     await loadShader();
     return new Promise((resolve, reject) => {

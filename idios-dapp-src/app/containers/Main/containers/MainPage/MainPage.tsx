@@ -587,7 +587,7 @@ const MainPage: React.FC = () => {
           </div>
         </Row>
         <Label>Expiry Block</Label>
-        <Input placeholder="e.g. 3990000" value={expiryBlock} onChange={e => setExpiryBlock(e.target.value)} />
+        <Input placeholder="e.g. 3990000" value={expiryBlock} onChange={e => setExpiryBlock(e.target.value.trim())} />
         <HintText>Current Beam block + ~10,000 blocks ≈ 1 week</HintText>
       </Section>
 

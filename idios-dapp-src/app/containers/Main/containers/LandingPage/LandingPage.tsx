@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { styled } from '@linaria/react';
 import { ROUTES_PATH, ROUTES_FULL } from '@app/shared/constants';
+import { getUserKey } from '@app/core/api';
 
 const Container = styled.div`
   display: flex;
@@ -26,8 +27,41 @@ const Title = styled.h1`
 const Subtitle = styled.p`
   font-size: 14px;
   color: rgba(255,255,255,0.6);
-  margin-bottom: 50px;
+  margin-bottom: 24px;
   text-align: center;
+`;
+
+const PubKeyPill = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin-bottom: 32px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.03);
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  font-family: monospace;
+`;
+
+const PubKeyLabel = styled.span`
+  color: rgba(255,255,255,0.5);
+`;
+
+const CopyBtn = styled.button`
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+  &:hover {
+    color: #e8e8e8;
+    background: rgba(255,255,255,0.08);
+  }
 `;
 
 const Card = styled.button`
@@ -63,22 +97,64 @@ const CardDesc = styled.div`
   color: rgba(255,255,255,0.6);
 `;
 
+const truncatePk = (pk: string) => {
+  if (!pk || pk.length < 16) return pk;
+  return pk.slice(0, 8) + '...' + pk.slice(-6);
+};
+
 const LandingPage: React.FC = () => {
   const navigate = useNavigate();
+  const [userPk, setUserPk] = useState<string>('');
+  const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
-    // If URL parameters are present (e.g. Bob's offer link),
-    // skip landing and go straight to the Create Job form
     const params = new URLSearchParams(window.location.search);
     if (params.toString().length > 0) {
       navigate(ROUTES_FULL.MAIN.START, { replace: true });
+      return;
     }
+    getUserKey()
+      .then((pk: string) => { if (pk) setUserPk(pk); })
+      .catch(() => {});
   }, [navigate]);
+
+  const handleCopy = () => {
+    if (!userPk) return;
+    let ok = false;
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = userPk;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) { ok = false; }
+    if (!ok && navigator.clipboard) {
+      navigator.clipboard.writeText(userPk).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }).catch(() => {});
+      return;
+    }
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
+  };
 
   return (
     <Container>
       <Title>Idios</Title>
       <Subtitle>Private settlement for AI and other compute on Beam</Subtitle>
+      {userPk ? (
+        <PubKeyPill>
+          <PubKeyLabel>Your pubkey for this contract:</PubKeyLabel>
+          <span>{truncatePk(userPk)}</span>
+          <CopyBtn onClick={handleCopy}>{copied ? 'Copied' : 'Copy'}</CopyBtn>
+        </PubKeyPill>
+      ) : null}
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.START)}>
         <CardTitle>Start a job</CardTitle>
         <CardDesc>Set up a private job with payment locked in escrow.</CardDesc>
