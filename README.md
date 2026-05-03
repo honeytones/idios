@@ -50,7 +50,7 @@ Funds always flow to the right party. The arbitrator can decide who wins a dispu
 
 ### Two phase claim
 
-Idios v2.1 uses a two phase claim pattern. Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the job status but never move funds. The beneficiary then calls `claim` to actually receive the payout, signed by their own key. This works around a Beam BVM constraint where a single kernel cannot cleanly sign for one party while routing funds to another.
+Idios v3 uses a two phase claim pattern. Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the job status but never move funds. The beneficiary then calls `claim` to actually receive the payout, signed by their own key. This works around a Beam BVM constraint where a single kernel cannot cleanly sign for one party while routing funds to another.
 
 ---
 
@@ -58,7 +58,7 @@ Idios v2.1 uses a two phase claim pattern. Authorisation methods (approve, resol
 
 **Live on Beam mainnet** ✅
 
-- v2.1 contract deployed at block 3842196 (May 2, 2026)
+- v3 contract deployed at block 3842196 (May 2, 2026)
 - All four Mode B resolution paths verified end to end with real funds
 - Dapp v2.1.4 published, supports both modes via UI
 
@@ -162,7 +162,7 @@ The Beam CLI wallet drives the contract directly. Useful for scripting, building
 - A copy of `idios_app.wasm` (downloadable from this repo or built from source, see [Build](#build))
 - A Beam mainnet node to connect to. Run your own, or use a public node like `eu-node01.mainnet.beam.mw:8100`.
 
-All examples use `cid=f40eb64d...` (v2.1) and a public node. Substitute your own as needed.
+All examples use `cid=f40eb64d...` (v3) and a public node. Substitute your own as needed.
 
 ### Get worker pubkey for this contract
 

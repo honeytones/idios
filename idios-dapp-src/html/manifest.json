@@ -4,7 +4,7 @@
     "url": "localapp/app/index.html",
     "app": "localapp/app/contract.wasm",
     "icon": "localapp/app/logo.svg",
-    "version": "1.1.0",
+    "version": "2.1.4",
     "api_version": "7.2",
     "min_api_version": "7.0",
     "guid": "a1b2c3d4e5f6471890abcdef12345678"
