@@ -114,7 +114,7 @@ export async function claimJob(job_id, total) {
 export async function viewJob(job_id) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=view_job,cid=${CID},job_id=${job_id}`;
+        const args = `role=manager,action=view_job,cid=${CID},job_id=${job_id}`;
         Utils.invokeContract(args, (err, result, full) => {
             try {
                 const raw = full && full.result && full.result.output;

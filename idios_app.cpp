@@ -405,9 +405,11 @@ void On_user_view_job(const ContractID& cid)
     if (!Env::DocGetNum64("job_id", &job_id)) return On_error("job_id required");
 
     struct KeyJob {
-        uint8_t  prefix = Idios::Tags::s_Job;
+        uint8_t  prefix;
         uint64_t job_id;
     } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
     key.job_id = job_id;
     Env::Key_T<KeyJob> k;
     k.m_Prefix.m_Cid = cid;
@@ -449,6 +451,10 @@ BEAM_EXPORT void Method_0()
             Env::DocGroup grRole("manager");
             { Env::DocGroup grMethod("deploy"); }
             { Env::DocGroup grMethod("view"); }
+            {
+                Env::DocGroup grMethod("view_job");
+                Env::DocAddText("job_id", "uint64");
+            }
         }
         {
             Env::DocGroup grRole("user");
@@ -520,10 +526,6 @@ BEAM_EXPORT void Method_0()
                 Env::DocAddText("total",    "Amount");
                 Env::DocAddText("asset_id", "AssetID");
             }
-            {
-                Env::DocGroup grMethod("view_job");
-                Env::DocAddText("job_id", "uint64");
-            }
         }
         {
             Env::DocGroup grRole("arbitrator");
@@ -550,9 +552,10 @@ BEAM_EXPORT void Method_0()
 BEAM_EXPORT void Method_1()
 {
     static const ActionEntry MANAGER_ACTIONS[] = {
-        {"deploy", On_manager_deploy},
-        {"create", On_manager_deploy},
-        {"view",   On_manager_view},
+        {"deploy",   On_manager_deploy},
+        {"create",   On_manager_deploy},
+        {"view",     On_manager_view},
+        {"view_job", On_user_view_job},
     };
     static const ActionEntry USER_ACTIONS[] = {
         {"create_a",            On_user_create_a},
@@ -565,7 +568,6 @@ BEAM_EXPORT void Method_1()
         {"claim_after_timeout", On_user_claim_after_timeout},
         {"refund",              On_user_refund},
         {"claim",               On_user_claim},
-        {"view_job",            On_user_view_job},
         {"get_key",             On_user_get_key},
     };
     static const ActionEntry ARBITRATOR_ACTIONS[] = {
