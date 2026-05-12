@@ -16,6 +16,8 @@ Public payment rails leak. Every job, every payment, every counterparty becomes 
 
 Idios solves the payment and settlement privacy problem. Payment is locked in private escrow on [Beam](https://beam.mw). The worker locks collateral as a performance bond. Settlement happens on chain with full privacy of amounts and parties. Beam's MimbleWimble protocol hides amounts and identities at the base layer. Idios is escrow built on top.
 
+The primitive Idios implements is the same one ERC-8183 standardises on Ethereum for AI agent commerce: a Job with a Client, a Provider, and an Evaluator, with payment held in escrow until verifiable delivery. ERC-8183 implementations on Ethereum, Base, and BNB Chain are public by default. Idios is the private equivalent on Beam.
+
 ---
 
 ## How it works
@@ -60,13 +62,13 @@ Idios v3 uses a two phase claim pattern. Authorisation methods (approve, resolve
 
 - v3 contract deployed at block 3842196 (May 2, 2026)
 - All four Mode B resolution paths verified end to end with real funds
-- Dapp v2.1.4 published, supports both modes via UI
+- Dapp v3.0.6 published, supports both modes via UI
 
 **Verified resolution paths (real funds, mainnet):**
 
 | Path | Status flow | Job |
 |------|-------------|-----|
-| Mode A hash match | Open → Active → Settled (single tx) | 7777 |
+| Mode A hash match | Open → Active → Settled (single tx) | 22224 |
 | Mode B approve | Open → Active → AwaitingApproval → Settled → Closed | 11112, 33335 |
 | Mode B dispute, resolved to worker | Open → Active → AwaitingApproval → Disputed → ResolvedToBob → Closed | 11113 |
 | Mode B dispute, resolved to requester | Open → Active → AwaitingApproval → Disputed → ResolvedToAlice → Closed | 11114 |
@@ -331,6 +333,12 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 - [ ] M of N signature requirement on resolve_alice and resolve_bob
 - [ ] Coordination layer for arbitrators to communicate (Beam SBBS or compatible)
 - [ ] First multi-arbitrator dispute resolution on mainnet
+
+**Phase 1.5: ERC-8183 semantic alignment**
+
+- [ ] Rename contract field references from Requester/Worker/Arbitrator to Client/Provider/Evaluator in docs and dapp UI
+- [ ] Document Job lifecycle vocabulary (Open, Funded, Submitted, Terminal) alongside Idios native status codes
+- [ ] Reference implementation in v4 contract release notes
 
 **Phase 2: Payload delivery**
 
