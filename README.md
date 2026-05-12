@@ -33,7 +33,7 @@ For deterministic work where the correct output is a specific hash known in adva
 3. Worker delivers work and submits the result hash on chain.
 4. If hashes match, the contract atomically releases payment plus collateral to the worker. Done.
 
-No third party involved. Trustless when the hash is right.
+No arbitrator involvement. Settlement is mechanical once hashes match.
 
 ### Reviewed Settlement (Mode B)
 
