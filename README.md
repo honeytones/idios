@@ -24,7 +24,7 @@ The primitive Idios implements is the same one ERC-8183 standardises on Ethereum
 
 Two settlement modes, picked per job at creation time.
 
-### Fast Settlement (Mode A)
+### Hash-verified Settlement (Mode A)
 
 For deterministic work where the correct output is a specific hash known in advance.
 
@@ -99,7 +99,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 
 | Action | Description |
 |--------|-------------|
-| `create_a` | Create a Mode A job (Fast Settlement). Locks payment. |
+| `create_a` | Create a Mode A job (Hash-verified Settlement). Locks payment. |
 | `create_b` | Create a Mode B job (Reviewed Settlement). Locks payment, sets review window and dispute fee. |
 | `commit` | Worker locks collateral, status moves to Active. |
 | `submit_delivery` | Worker submits result hash. In Mode A, settles atomically if hash matches. In Mode B, sets AwaitingApproval. |
@@ -146,7 +146,7 @@ The simplest way to use Idios is through the Beam Desktop wallet's dapp store.
 
 The dapp opens to a landing page with three entry points:
 
-- **Start a job**: As a requester, fill in deal terms (job ID, payment, expiry, worker pubkey). Choose Fast Settlement (upload deliverable file, dapp computes SHA-256 hash locally) or Reviewed Settlement (set review window and dispute fee). Create the job. If you arrived via an offer link from a worker, the form auto-fills.
+- **Start a job**: As a requester, fill in deal terms (job ID, payment, expiry, worker pubkey). Choose Hash-verified Settlement (upload deliverable file, dapp computes SHA-256 hash locally) or Reviewed Settlement (set review window and dispute fee). Create the job. If you arrived via an offer link from a worker, the form auto-fills.
 - **Generate a job offer**: As a worker, fill in the agreed deal terms, upload your finished deliverable (Mode A) or set review settings (Mode B), and click Generate Offer. Produces a shareable text block and link for sending to the requester.
 - **My jobs**: See live status of every job tracked locally. Action buttons appear conditionally: Refund expired jobs, Approve or Dispute Mode B deliveries, Claim Funds when a job is Settled or Resolved in your favour.
 
@@ -188,7 +188,7 @@ The output is the worker's `node_pk` for that contract. Send this to the request
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-### Create a Mode A job (Fast Settlement)
+### Create a Mode A job (Hash-verified Settlement)
 
 ```bash
 ./beam-wallet shader \
