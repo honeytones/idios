@@ -327,35 +327,41 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 ## Roadmap
 
-**Phase 1: Multi-arbitrator dispute resolution**
+This roadmap is partner-driven. Phase 0.5 and 1 are the next planned releases. Everything after depends on real-world demand.
 
-- [ ] Multi-arbitrator key registry in the contract
-- [ ] M of N signature requirement on resolve_alice and resolve_bob
-- [ ] Coordination layer for arbitrators to communicate (Beam SBBS or compatible)
-- [ ] First multi-arbitrator dispute resolution on mainnet
+**Phase 0.5 (next): Arbitrator console in dapp**
+
+- [ ] In-dapp page for the arbitrator to track Disputed jobs added off chain
+- [ ] Resolve buttons (resolve_alice, resolve_bob) on each tracked job
+- [ ] Privacy: per-arbitrator notification model, no shader-side job enumeration
+- [ ] Ships as dapp v3.0.8, no contract changes
+
+**Phase 1: Multi-arbitrator dispute resolution and agent runtime**
+
+- [ ] Per-job arbitrator set (up to 5 pubkeys, M of N threshold) in v4 contract
+- [ ] New sig_count and sig_indices args on resolve_alice and resolve_bob
+- [ ] Default fallback to contract-level arbitrator for backward compatibility
+- [ ] Headless agent runtime daemon for automated worker, client, and arbitrator operation
+- [ ] v4 contract deployed on Beam mainnet alongside v3 (jobs in flight on v3 continue on v3)
 
 **Phase 1.5: ERC-8183 semantic alignment**
 
-- [ ] Rename contract field references from Requester/Worker/Arbitrator to Client/Provider/Evaluator in docs and dapp UI
+- [ ] Rename Requester / Worker / Arbitrator to Client / Provider / Evaluator across dapp UI and docs
 - [ ] Document Job lifecycle vocabulary (Open, Funded, Submitted, Terminal) alongside Idios native status codes
-- [ ] Reference implementation in v4 contract release notes
+- [ ] Migration guide for marketplaces moving from Idios naming to ERC-8183 naming
 
-**Phase 2: Payload delivery**
+**Phase 2: Payload delivery and asset diversity**
 
 - [ ] Job specifications and deliverables sent via IPFS through Beam's private IPFS network
 - [ ] Encrypted payloads with keys exchanged out of band
 - [ ] Larger work files supported beyond what fits in a hash
+- [ ] Confidential asset support beyond BEAM (Nephrite-issued assets, others)
 
-**Phase 3: Verification beyond deterministic and human review**
+**Phase 3+: Future research (partner-driven)**
 
-- [ ] Programmatic verifiers for specific job classes (numerical bounds, schema match, etc)
-- [ ] Public verifier directory
-- [ ] Verifier reputation tracking
-
-**Other directions under consideration**
-
-- [ ] Asset support beyond BEAM (Nephrite asset_id=47 etc)
-- [ ] Native dapp arbitrator dashboard
+- [ ] Programmatic verifiers for narrow job classes (e.g. JSON schema match) if a partner pulls
+- [ ] Staked arbitrator cluster with slashing (ERC-8183 verifier-cluster variant)
+- [ ] Cross-chain bridges if and only if a real use case forces it
 
 ---
 
