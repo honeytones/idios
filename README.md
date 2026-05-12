@@ -61,8 +61,8 @@ Idios v3 uses a two phase claim pattern. Authorisation methods (approve, resolve
 **Live on Beam mainnet** ✅
 
 - v3 contract deployed at block 3842196 (May 2, 2026)
-- All four Mode B resolution paths verified end to end with real funds
-- Dapp v3.0.6 published, supports both modes via UI
+- Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds
+- Dapp v3.0.7 published, supports both modes via UI
 
 **Verified resolution paths (real funds, mainnet):**
 
@@ -126,7 +126,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 1 = Active             (worker has committed collateral)
 2 = AwaitingApproval   (Mode B, worker has delivered, in review window)
 3 = Disputed           (Mode B, requester has disputed, awaiting arbitrator)
-4 = Settled            (worker can claim payment + collateral)
+4 = Settled            (beneficiary can claim, payment + collateral)
 5 = Refunded           (terminal, requester reclaimed funds after expiry)
 6 = ResolvedToAlice    (arbitrator sided with requester, requester can claim)
 7 = ResolvedToBob      (arbitrator sided with worker, worker can claim)
@@ -315,7 +315,7 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 **Two phase claim.** Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the job status. The beneficiary then calls Method_15 Claim signed with their own key to actually receive the funds. This works around a Beam BVM constraint where one kernel can't cleanly sign for one party while routing funds to a different party.
 
-**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). M of N multi-arbitrator resolution is Phase 1 of the roadmap.
+**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The Phase 0.5 dapp release adds an in-dapp console so the arbitrator can track and resolve Disputed jobs from the UI. M of N multi-arbitrator resolution comes in Phase 1 (v4 contract).
 
 **Contract-specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
 
