@@ -323,7 +323,7 @@ const FinishJobPage: React.FC = () => {
     const link = window.location.origin + window.location.pathname + '?' + params.toString();
     setOfferLink(link);
 
-    const settlementLabel = settlement === 'fast' ? 'Fast Settlement (Mode A)' : 'Reviewed Settlement (Mode B)';
+    const settlementLabel = settlement === 'fast' ? 'Hash-verified Settlement (Mode A)' : 'Reviewed Settlement (Mode B)';
     const lines = [
       '== Idios Job Offer ==',
       '',
@@ -377,7 +377,7 @@ const FinishJobPage: React.FC = () => {
         <SectionTitle>Settlement Type</SectionTitle>
         <SettlementOptions>
           <SettlementCard selected={settlement === 'fast'} onClick={() => setSettlement('fast')}>
-            <CardTitle>Fast Settlement</CardTitle>
+            <CardTitle>Hash-verified Settlement</CardTitle>
             <CardDesc>Settles immediately when you deliver matching result hash. Best for deterministic tasks.</CardDesc>
           </SettlementCard>
           <SettlementCard selected={settlement === 'review'} onClick={() => setSettlement('review')}>

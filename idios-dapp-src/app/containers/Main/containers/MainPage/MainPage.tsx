@@ -426,7 +426,7 @@ const MainPage: React.FC = () => {
       }
 
       if (settlement === 'fast' && !resultHash) {
-        throw new Error('Result hash required for fast settlement');
+        throw new Error('Result hash required for hash-verified settlement');
       }
 
       const paymentGroth = beamToGroth(payment);
@@ -559,7 +559,7 @@ const MainPage: React.FC = () => {
         <SectionTitle>Settlement Type</SectionTitle>
         <SettlementOptions>
           <SettlementCard selected={settlement === 'fast'} onClick={() => setSettlement('fast')}>
-            <CardTitle>Fast Settlement</CardTitle>
+            <CardTitle>Hash-verified Settlement</CardTitle>
             <CardDesc>Settles immediately when node delivers matching result hash. Best for deterministic tasks.</CardDesc>
           </SettlementCard>
           <SettlementCard selected={settlement === 'review'} onClick={() => setSettlement('review')}>
