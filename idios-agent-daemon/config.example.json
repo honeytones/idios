@@ -1,0 +1,18 @@
+{
+  "beam_wallet_binary": "/home/tones/beam-cli-new1/beam-wallet",
+  "shader_app_file": "/home/tones/idios-repo/idios_app.wasm",
+  "wallet_path": "/home/tones/beam-cli-new1/wallet.db",
+  "node_addr": "127.0.0.1:10005",
+  "cid": "f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45",
+  "poll_interval_seconds": 30,
+  "log_file": "/home/tones/idios-repo/idios-agent-daemon/idios-daemon.log",
+  "state_file": "/home/tones/idios-repo/idios-agent-daemon/jobs-state.json",
+  "jobs": [
+    {
+      "job_id": 22226,
+      "role": "worker",
+      "expected_collateral": 1000000,
+      "delivery_hash": "cafebabe00000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

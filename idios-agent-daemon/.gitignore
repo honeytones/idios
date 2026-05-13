@@ -1,0 +1,5 @@
+config.json
+jobs-state.json
+*.log
+*.bak
+logs/
