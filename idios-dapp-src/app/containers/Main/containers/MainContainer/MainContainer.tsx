@@ -5,6 +5,7 @@ import { MainPage } from '@app/containers/Main/containers/MainPage';
 import { LandingPage } from '@app/containers/Main/containers/LandingPage';
 import { FinishJobPage } from '@app/containers/Main/containers/FinishJobPage';
 import { MyJobsPage } from '@app/containers/Main/containers/MyJobsPage';
+import { ArbitratorPage } from '@app/containers/Main/containers/ArbitratorPage';
 
 const routes = [
   {
@@ -25,6 +26,11 @@ const routes = [
   {
     path: ROUTES_PATH.MAIN.MY_JOBS_PAGE,
     element: <MyJobsPage />,
+    exact: true,
+  },
+  {
+    path: ROUTES_PATH.MAIN.ARBITRATOR_PAGE,
+    element: <ArbitratorPage />,
     exact: true,
   },
   {

@@ -45,3 +45,42 @@ export function removeTrackedJob(jobId: number): void {
     console.error('Failed to remove tracked job:', err);
   }
 }
+
+const ARBITRATOR_KEY = 'idios_arbitrator_jobs';
+
+export interface TrackedArbitratorJob {
+  jobId: number;
+  addedAt: number;
+}
+
+export function getTrackedArbitratorJobs(): TrackedArbitratorJob[] {
+  try {
+    const raw = localStorage.getItem(ARBITRATOR_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addTrackedArbitratorJob(job: TrackedArbitratorJob): void {
+  const existing = getTrackedArbitratorJobs();
+  const filtered = existing.filter(j => j.jobId !== job.jobId);
+  filtered.unshift(job);
+  try {
+    localStorage.setItem(ARBITRATOR_KEY, JSON.stringify(filtered));
+  } catch (err) {
+    console.error('Failed to save tracked arbitrator job:', err);
+  }
+}
+
+export function removeTrackedArbitratorJob(jobId: number): void {
+  const existing = getTrackedArbitratorJobs();
+  const filtered = existing.filter(j => j.jobId !== jobId);
+  try {
+    localStorage.setItem(ARBITRATOR_KEY, JSON.stringify(filtered));
+  } catch (err) {
+    console.error('Failed to remove tracked arbitrator job:', err);
+  }
+}

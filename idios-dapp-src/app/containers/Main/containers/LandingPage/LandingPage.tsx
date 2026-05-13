@@ -97,6 +97,20 @@ const CardDesc = styled.div`
   color: rgba(255,255,255,0.6);
 `;
 
+const ArbitratorLink = styled.button`
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.25);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 32px;
+  padding: 4px 8px;
+  &:hover {
+    color: rgba(255,255,255,0.6);
+  }
+`;
+
 const truncatePk = (pk: string) => {
   if (!pk || pk.length < 16) return pk;
   return pk.slice(0, 8) + '...' + pk.slice(-6);
@@ -167,6 +181,9 @@ const LandingPage: React.FC = () => {
         <CardTitle>My jobs</CardTitle>
         <CardDesc>Track jobs you've created or accepted. Approve work, dispute, claim funds, or refund.</CardDesc>
       </Card>
+      <ArbitratorLink onClick={() => navigate(ROUTES_FULL.MAIN.ARBITRATOR)}>
+        Arbitrator console
+      </ArbitratorLink>
     </Container>
   );
 };

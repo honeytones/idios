@@ -13,6 +13,7 @@ export const ROUTES_PATH = {
     START_PAGE: 'start',
     FINISH_PAGE: 'finish',
     MY_JOBS_PAGE: 'my-jobs',
+    ARBITRATOR_PAGE: 'arbitrator',
   },
   
 };
@@ -24,6 +25,7 @@ export const ROUTES_FULL = {
     START: '/main/start',
     FINISH: '/main/finish',
     MY_JOBS: '/main/my-jobs',
+    ARBITRATOR: '/main/arbitrator',
     MAIN_PAGE: '/main/main_page',
   },
 };
