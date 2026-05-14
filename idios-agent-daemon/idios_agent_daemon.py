@@ -62,7 +62,7 @@ MODE_A = 65
 MODE_B = 66
 
 DEFAULT_POLL_INTERVAL_SECONDS = 30
-SHADER_TIMEOUT_SECONDS = 120
+SHADER_TIMEOUT_SECONDS = 600
 
 
 def setup_logging(logfile_path):
@@ -234,6 +234,23 @@ def shader_claim(cfg, password, job_id, total, logger):
     return rc == 0
 
 
+def shader_approve(cfg, password, job_id, logger):
+    args = "role=user,action=approve," + build_args(cfg, [("job_id", job_id)])
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
+def shader_refund(cfg, password, job_id, payment, collateral, asset_id, logger):
+    args = "role=user,action=refund," + build_args(cfg, [
+        ("job_id", job_id),
+        ("payment", payment),
+        ("collateral", collateral),
+        ("asset_id", asset_id),
+    ])
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
 def status_name(s):
     try:
         return STATUS_NAMES.get(int(s), "Unknown(" + str(s) + ")")
@@ -333,7 +350,110 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
 
 
 def handle_client_job(cfg, password, job_cfg, state, logger):
-    logger.info("job %s: role=client not implemented in MVP, skipping", job_cfg["job_id"])
+    """
+    Client role state machine. Default behaviour: manual approval. Operator must
+    set "auto_approve_on_hash_match": true and provide "expected_delivery_hash"
+    in config to enable auto-approve. Auto-fires claim on any terminal state
+    that returns funds (ResolvedToAlice, Refunded).
+    """
+    job_id = job_cfg["job_id"]
+    job_state_key = str(job_id)
+    job_state = state.setdefault(job_state_key, {
+        "last_status": None,
+        "approve_fired": False,
+        "refund_fired": False,
+        "claim_fired": False,
+    })
+
+    job = shader_view_job(cfg, password, job_id, logger)
+    if not job:
+        logger.warning("job %s: view_job failed or no data", job_id)
+        return
+
+    status = int(job.get("status", -1))
+    payment = int(job.get("payment", 0))
+    collateral = int(job.get("collateral", 0))
+    dispute_fee = int(job.get("dispute_fee", 0))
+    expiry_block = int(job.get("expiry_block", 0))
+    delivery_hash = job.get("delivery_hash", "")
+    asset_id = int(job.get("asset_id", 0))
+    mode = int(job.get("mode", MODE_A))
+
+    if job_state.get("last_status") != status:
+        logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
+        job_state["last_status"] = status
+
+    # Open + past expiry_block: client can refund.
+    if status == STATUS_OPEN and not job_state.get("refund_fired"):
+        current_height = int(job.get("_current_height", 0))  # not in view_job output today
+        # Without a reliable current_height from view_job, we let operators opt in
+        # via auto_refund_after_expiry: true. Daemon refunds only if config flag
+        # is set; otherwise log and wait.
+        if not job_cfg.get("auto_refund_after_expiry", False):
+            return
+        # If we can't tell what block we're at, we can't safely auto-refund.
+        # For now, this branch is a future enhancement that needs a current_height
+        # source. Log once per status transition and skip.
+        logger.info("job %s: auto_refund_after_expiry set but daemon has no "
+                    "block-height source; manual refund needed for now.", job_id)
+        return
+
+    # AwaitingApproval (Mode B only): client decides approve, dispute, or wait.
+    if status == STATUS_AWAITING_APPROVAL and not job_state.get("approve_fired"):
+        if not job_cfg.get("auto_approve_on_hash_match", False):
+            logger.info("job %s: AwaitingApproval, manual approval required. "
+                        "Set auto_approve_on_hash_match in config to auto-approve.", job_id)
+            return
+        expected = job_cfg.get("expected_delivery_hash")
+        if not expected:
+            logger.error("job %s: auto_approve_on_hash_match set but no "
+                         "expected_delivery_hash in config. NOT approving.", job_id)
+            return
+        if str(expected).lower() != str(delivery_hash).lower():
+            logger.warning("job %s: delivery_hash mismatch, chain=%s expected=%s. "
+                           "NOT auto-approving. Operator should review.",
+                           job_id, delivery_hash, expected)
+            return
+        logger.info("job %s: delivery_hash matches expected, firing approve", job_id)
+        if shader_approve(cfg, password, job_id, logger):
+            job_state["approve_fired"] = True
+            logger.info("job %s: approve fired ok", job_id)
+        else:
+            logger.error("job %s: approve failed", job_id)
+        return
+
+    # ResolvedToAlice: dispute resolved in client's favour. Claim back
+    # payment + dispute_fee. Worker forfeits collateral.
+    if status == STATUS_RESOLVED_TO_ALICE and not job_state.get("claim_fired"):
+        total = payment + dispute_fee
+        logger.info("job %s: dispute resolved to client, firing claim, total=%s "
+                    "(payment %s + dispute_fee %s)",
+                    job_id, total, payment, dispute_fee)
+        if shader_claim(cfg, password, job_id, total, logger):
+            job_state["claim_fired"] = True
+            logger.info("job %s: claim fired ok", job_id)
+        else:
+            logger.error("job %s: claim failed", job_id)
+        return
+
+    # Refunded: refund accepted on chain, claim moves funds back to wallet.
+    if status == STATUS_REFUNDED and not job_state.get("claim_fired"):
+        total = payment
+        logger.info("job %s: Refunded, firing claim, total=%s", job_id, total)
+        if shader_claim(cfg, password, job_id, total, logger):
+            job_state["claim_fired"] = True
+            logger.info("job %s: claim fired ok", job_id)
+        else:
+            logger.error("job %s: claim failed", job_id)
+        return
+
+    if status == STATUS_DISPUTED:
+        logger.info("job %s: Disputed, waiting for arbitrator. Daemon takes no action.", job_id)
+        return
+
+    if status in (STATUS_CLOSED, STATUS_RESOLVED_TO_BOB, STATUS_SETTLED):
+        # Terminal from the client's perspective. Nothing to do.
+        return
 
 
 def handle_arbitrator_job(cfg, password, job_cfg, state, logger):
