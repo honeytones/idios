@@ -251,6 +251,26 @@ def shader_refund(cfg, password, job_id, payment, collateral, asset_id, logger):
     return rc == 0
 
 
+def shader_resolve_alice(cfg, password, job_id, total, logger):
+    args = "role=arbitrator,action=resolve_alice," + build_args(cfg, [
+        ("job_id", job_id),
+        ("total", total),
+        ("asset_id", 0),
+    ])
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
+def shader_resolve_bob(cfg, password, job_id, total, logger):
+    args = "role=arbitrator,action=resolve_bob," + build_args(cfg, [
+        ("job_id", job_id),
+        ("total", total),
+        ("asset_id", 0),
+    ])
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
 def status_name(s):
     try:
         return STATUS_NAMES.get(int(s), "Unknown(" + str(s) + ")")
@@ -457,7 +477,78 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
 
 
 def handle_arbitrator_job(cfg, password, job_cfg, state, logger):
-    logger.info("job %s: role=arbitrator not implemented in MVP, skipping", job_cfg["job_id"])
+    """
+    Arbitrator role: only acts on status=Disputed.
+    Auto-resolves Mode B disputes by comparing chain delivery_hash to
+    config expected_result_hash:
+      match    -> resolve_bob (worker delivered what was agreed)
+      mismatch -> resolve_alice (worker did not deliver)
+    Requires expected_result_hash in config to auto-decide. Without it,
+    or for Mode A jobs (which should not be Disputed in normal flow),
+    logs and surfaces to operator.
+    Total payout includes payment + collateral + dispute_fee (the full pool
+    held by the contract during dispute).
+    """
+    job_id = job_cfg["job_id"]
+    job_state_key = str(job_id)
+    job_state = state.setdefault(job_state_key, {
+        "last_status": None,
+        "resolved": False,
+    })
+
+    job = shader_view_job(cfg, password, job_id, logger)
+    if not job:
+        logger.warning("job %s: view_job failed or no data", job_id)
+        return
+
+    status = int(job.get("status", -1))
+    payment = int(job.get("payment", 0))
+    collateral = int(job.get("collateral", 0))
+    dispute_fee = int(job.get("dispute_fee", 0))
+    delivery_hash = job.get("delivery_hash", "")
+    mode = int(job.get("mode", MODE_A))
+
+    if job_state.get("last_status") != status:
+        logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
+        job_state["last_status"] = status
+
+    if status != STATUS_DISPUTED:
+        # Arbitrator only acts on disputes. Everything else is logged and ignored.
+        return
+
+    if job_state.get("resolved"):
+        # Already fired a resolution; waiting for chain to confirm.
+        return
+
+    if mode != MODE_B:
+        logger.warning("job %s: Disputed but mode=%s (not Mode B). NOT auto-resolving. "
+                       "Operator should review.", job_id, mode)
+        return
+
+    expected = job_cfg.get("expected_result_hash")
+    if not expected:
+        logger.info("job %s: Disputed, no expected_result_hash in config. "
+                    "Waiting for operator decision.", job_id)
+        return
+
+    total = payment + collateral + dispute_fee
+    if str(expected).lower() == str(delivery_hash).lower():
+        logger.info("job %s: delivery_hash matches expected, resolving to BOB "
+                    "(worker). total=%s", job_id, total)
+        if shader_resolve_bob(cfg, password, job_id, total, logger):
+            job_state["resolved"] = True
+            logger.info("job %s: resolve_bob fired ok", job_id)
+        else:
+            logger.error("job %s: resolve_bob failed", job_id)
+    else:
+        logger.warning("job %s: delivery_hash mismatch, chain=%s expected=%s. "
+                       "Resolving to ALICE (requester). total=%s",
+                       job_id, delivery_hash, expected, total)
+        if shader_resolve_alice(cfg, password, job_id, total, logger):
+            job_state["resolved"] = True
+            logger.info("job %s: resolve_alice fired ok", job_id)
+        else:
+            logger.error("job %s: resolve_alice failed", job_id)
 
 
 def main():
