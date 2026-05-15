@@ -281,8 +281,16 @@ const ModalContent = styled.div`
   width: 90%;
   max-width: 640px;
   max-height: 85vh;
-  overflow-y: auto;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+`;
+
+const ModalScroll = styled.div`
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
 `;
 
 const ModalTitle = styled.h2`
@@ -363,6 +371,9 @@ const ModalActions = styled.div`
   justify-content: flex-end;
   align-items: center;
   margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex: 0 0 auto;
 `;
 
 const ModalNote = styled.div`
@@ -726,6 +737,7 @@ const MyJobsPage: React.FC = () => {
         <ModalOverlay onClick={closeExportModal}>
           <ModalContent onClick={(e: any) => e.stopPropagation()}>
             <ModalTitle>Automate Job #{exportJob.jobId}</ModalTitle>
+            <ModalScroll>
             <ModalSubtitle>
               The Idios agent daemon is a small Python program you run on your own computer that watches this
               job's status on chain and fires the right actions automatically (commit, submit_delivery,
@@ -758,6 +770,7 @@ const MyJobsPage: React.FC = () => {
             <ModalLabel>Generated config (add to the jobs array)</ModalLabel>
             <ConfigTextarea readOnly value={buildDaemonConfig(exportJob, exportRole, exportHash)} />
             {copyStatus && <ModalNote style={{ color: 'rgba(140, 220, 160, 0.9)' }}>{copyStatus}</ModalNote>}
+            </ModalScroll>
             <ModalActions>
               <CloseButton onClick={closeExportModal}>Close</CloseButton>
               <CopyButton onClick={handleCopy}>Copy snippet</CopyButton>
