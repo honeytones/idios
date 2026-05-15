@@ -315,7 +315,7 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 **Two phase claim.** Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the job status. The beneficiary then calls Method_15 Claim signed with their own key to actually receive the funds. This works around a Beam BVM constraint where one kernel can't cleanly sign for one party while routing funds to a different party.
 
-**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The Phase 0.5 dapp release adds an in-dapp console so the arbitrator can track and resolve Disputed jobs from the UI. M of N multi-arbitrator resolution comes in Phase 1 (v4 contract).
+**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The dapp ships an in-dapp arbitrator console (since v3.0.8) so the arbitrator can track and resolve Disputed jobs from the UI. M of N multi-arbitrator resolution comes in Phase 1 (v4 contract).
 
 **Contract-specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
 
@@ -325,24 +325,33 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 ---
 
+## Agent runtime daemon
+
+`idios-agent-daemon/` in this repo is a small Python daemon that automates your role in an Idios job. Polls the chain, watches your tracked jobs, fires the right contract call when the state machine advances. Run on your own machine alongside a Beam CLI wallet, type the password once at startup, walk away.
+
+Supports all three Idios roles:
+
+- **Worker** (Bob): commit, submit_delivery, claim.
+- **Client** (Alice / requester): hash-match auto-approve, claim on dispute won or refund.
+- **Arbitrator**: hash-match auto-resolve in Mode B disputes (`resolve_bob` on match, `resolve_alice` on mismatch).
+
+Tested end to end on Beam mainnet against the live v3 contract. Three test artifacts on chain demonstrate each role: jobs 22227 (Mode A worker), 22228 (Mode B worker + client), 22229 (Mode B arbitrator resolving a malicious dispute).
+
+The dapp's My Jobs page has an **Automate this job** button on each tracked job card that generates a daemon config snippet you can paste straight into the daemon's config. See [`idios-agent-daemon/README.md`](./idios-agent-daemon/README.md) for setup and configuration.
+
+---
+
 ## Roadmap
 
-This roadmap is partner-driven. Phase 0.5 and 1 are the next planned releases. Everything after depends on real-world demand.
+This roadmap is partner-driven. Phase 1 is the next planned release. Everything after depends on real-world demand.
 
-**Phase 0.5 (next): Arbitrator console in dapp**
-
-- [ ] In-dapp page for the arbitrator to track Disputed jobs added off chain
-- [ ] Resolve buttons (resolve_alice, resolve_bob) on each tracked job
-- [ ] Privacy: per-arbitrator notification model, no shader-side job enumeration
-- [ ] Ships as dapp v3.0.8, no contract changes
-
-**Phase 1: Multi-arbitrator dispute resolution and agent runtime**
+**Phase 1 (next): Multi-arbitrator dispute resolution**
 
 - [ ] Per-job arbitrator set (up to 5 pubkeys, M of N threshold) in v4 contract
 - [ ] New sig_count and sig_indices args on resolve_alice and resolve_bob
 - [ ] Default fallback to contract-level arbitrator for backward compatibility
-- [ ] Headless agent runtime daemon for automated worker, client, and arbitrator operation
 - [ ] v4 contract deployed on Beam mainnet alongside v3 (jobs in flight on v3 continue on v3)
+- [ ] Dapp UI for arbitrator config in Start a Job flow plus co-signing in arbitrator console
 
 **Phase 1.5: ERC-8183 semantic alignment**
 
@@ -368,5 +377,3 @@ This roadmap is partner-driven. Phase 0.5 and 1 are the next planned releases. E
 ## Contributing
 
 Idios is early and moving fast. If you're building on Beam and want to integrate, open an issue or reach out directly.
-
-Built by the community, for the community.
