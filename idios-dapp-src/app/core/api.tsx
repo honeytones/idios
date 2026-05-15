@@ -71,10 +71,10 @@ export async function submitDelivery(job_id, delivery_hash, mode, payment, colla
     });
 }
 
-export async function approveJob(job_id, payment, collateral) {
+export async function approveJob(job_id) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=approve,cid=${CID},job_id=${job_id},payment=${payment},collateral=${collateral},asset_id=0`;
+        const args = `role=user,action=approve,cid=${CID},job_id=${job_id}`;
         invokeContract(args, resolve, reject);
     });
 }
@@ -87,10 +87,10 @@ export async function disputeJob(job_id, dispute_fee) {
     });
 }
 
-export async function claimAfterTimeout(job_id, payment, collateral) {
+export async function claimAfterTimeout(job_id) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=claim_after_timeout,cid=${CID},job_id=${job_id},payment=${payment},collateral=${collateral},asset_id=0`;
+        const args = `role=user,action=claim_after_timeout,cid=${CID},job_id=${job_id}`;
         invokeContract(args, resolve, reject);
     });
 }

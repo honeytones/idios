@@ -32,6 +32,24 @@ const Subtitle = styled.p`
   text-align: center;
 `;
 
+const IntroBlurb = styled.div`
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(140, 180, 255, 0.2);
+  background: rgba(140, 180, 255, 0.04);
+  color: rgba(255,255,255,0.75);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+  a {
+    color: rgba(180, 210, 255, 0.95);
+    text-decoration: none;
+    &:hover { text-decoration: underline; }
+  }
+`;
+
 const BackLink = styled.button`
   background: none;
   border: 1px solid rgba(255,255,255,0.2);
@@ -231,6 +249,157 @@ const LoadingMsg = styled.div`
   margin: 20px 0;
 `;
 
+const DaemonConfigButton = styled.button`
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(140, 180, 255, 0.4);
+  background: transparent;
+  color: rgba(180, 210, 255, 0.95);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  &:hover {
+    background: rgba(140, 180, 255, 0.1);
+  }
+`;
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const ModalContent = styled.div`
+  background: #111;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  padding: 24px;
+  width: 90%;
+  max-width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+`;
+
+const ModalTitle = styled.h2`
+  font-size: 18px;
+  font-weight: 600;
+  color: #e8e8e8;
+  margin: 0 0 8px 0;
+`;
+
+const ModalSubtitle = styled.div`
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  margin-bottom: 18px;
+`;
+
+const ModalLabel = styled.div`
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+`;
+
+const ModalInput = styled.input`
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: white;
+  font-size: 13px;
+  font-family: monospace;
+  outline: none;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  &:focus {
+    border-color: #e8e8e8;
+  }
+`;
+
+const ModalSelect = styled.select`
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: white;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  &:focus {
+    border-color: #e8e8e8;
+  }
+`;
+
+const ConfigTextarea = styled.textarea`
+  width: 100%;
+  height: 110px;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.3);
+  color: rgba(255,255,255,0.9);
+  font-size: 12px;
+  font-family: monospace;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  margin-bottom: 12px;
+`;
+
+const ModalActions = styled.div`
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 16px;
+`;
+
+const ModalNote = styled.div`
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 12px;
+  line-height: 1.4;
+  a {
+    color: rgba(180, 210, 255, 0.95);
+    text-decoration: none;
+    &:hover { text-decoration: underline; }
+  }
+`;
+
+const CopyButton = styled.button`
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: 1px solid #e8e8e8;
+  background: #e8e8e8;
+  color: #042548;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+`;
+
+const CloseButton = styled.button`
+  padding: 8px 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.3);
+  background: transparent;
+  color: rgba(255,255,255,0.8);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+`;
+
 interface JobWithState extends TrackedJob {
   state?: any;
   loading: boolean;
@@ -267,6 +436,10 @@ const MyJobsPage: React.FC = () => {
   const [claimingId, setClaimingId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [disputingId, setDisputingId] = useState<number | null>(null);
+  const [exportJob, setExportJob] = useState<JobWithState | null>(null);
+  const [exportRole, setExportRole] = useState<'worker' | 'requester'>('worker');
+  const [exportHash, setExportHash] = useState('');
+  const [copyStatus, setCopyStatus] = useState<string>('');
 
   const loadJobs = async () => {
     setLoading(true);
@@ -351,9 +524,7 @@ const MyJobsPage: React.FC = () => {
     if (!job.state) return;
     setApprovingId(job.jobId);
     try {
-      const payment = job.state.payment || 0;
-      const collateral = job.state.collateral || 0;
-      await approveJob(job.jobId, payment, collateral);
+      await approveJob(job.jobId);
       setTimeout(() => loadJobs(), 3000);
     } catch (err) {
       console.error('Approve failed:', err);
@@ -384,6 +555,57 @@ const MyJobsPage: React.FC = () => {
     setJobs(prev => prev.filter(j => j.jobId !== jobId));
   };
 
+  const openExportModal = (job: JobWithState) => {
+    // Pre-fill the hash field from chain state when sensible.
+    // For requester (client daemon): pre-fill with chain's delivery_hash if worker has submitted.
+    // For worker daemon: leave empty, user types the hash they will submit.
+    const initialRole: 'worker' | 'requester' = (job.role === 'requester' ? 'requester' : 'worker');
+    let prefilled = '';
+    if (initialRole === 'requester' && job.state && job.state.delivery_hash &&
+        job.state.delivery_hash !== '0000000000000000000000000000000000000000000000000000000000000000') {
+      prefilled = job.state.delivery_hash;
+    }
+    setExportJob(job);
+    setExportRole(initialRole);
+    setExportHash(prefilled);
+    setCopyStatus('');
+  };
+
+  const closeExportModal = () => {
+    setExportJob(null);
+    setExportRole('worker');
+    setExportHash('');
+    setCopyStatus('');
+  };
+
+  const buildDaemonConfig = (job: JobWithState, role: 'worker' | 'requester', hash: string): string => {
+    const daemonRole = role === 'requester' ? 'client' : 'worker';
+    const entry: any = {
+      job_id: job.jobId,
+      role: daemonRole,
+    };
+    if (daemonRole === 'worker') {
+      entry.expected_collateral = job.state && job.state.collateral ? job.state.collateral : 0;
+      entry.delivery_hash = hash || '<paste the 32-byte hex hash you will submit>';
+    } else {
+      entry.auto_approve_on_hash_match = true;
+      entry.expected_delivery_hash = hash || '<paste the 32-byte hex hash you expect>';
+    }
+    return JSON.stringify(entry, null, 2);
+  };
+
+  const handleCopy = async () => {
+    if (!exportJob) return;
+    const text = buildDaemonConfig(exportJob, exportRole, exportHash);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus('Copied to clipboard');
+      setTimeout(() => setCopyStatus(''), 2000);
+    } catch (err) {
+      setCopyStatus('Copy failed, select text manually');
+    }
+  };
+
   return (
     <Container>
       <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
@@ -391,6 +613,18 @@ const MyJobsPage: React.FC = () => {
       <RefreshButton onClick={loadJobs} disabled={loading}>
         {loading ? 'Refreshing...' : 'Refresh'}
       </RefreshButton>
+
+      <IntroBlurb>
+        Track jobs to see their on-chain state and take actions (commit, submit, approve, dispute, claim, refund).
+        Each tracked job also has an <strong>Automate this job</strong> button, which generates a config snippet
+        for the <em>Idios agent daemon</em>, a small program you can run on your computer to fire those actions
+        automatically as the job moves through its state machine. Useful for autonomous agents, marketplaces, or
+        anyone who does not want to keep clicking buttons.
+        {' '}
+        <a href="https://github.com/honeytones/idios/blob/main/idios-agent-daemon/README.md" target="_blank" rel="noreferrer">
+          Read more about the daemon
+        </a>.
+      </IntroBlurb>
 
       <TrackForm>
         <TrackFormTitle>Track a Job</TrackFormTitle>
@@ -476,12 +710,61 @@ const MyJobsPage: React.FC = () => {
                 </ActionButton>
               </>
             )}
+            {job.state && (job.role === 'worker' || job.role === 'requester') && (
+              <DaemonConfigButton onClick={() => openExportModal(job)}>
+                Automate this job
+              </DaemonConfigButton>
+            )}
             <RemoveButton onClick={() => handleRemove(job.jobId)}>
               Stop tracking
             </RemoveButton>
           </ActionRow>
         </JobCard>
       ))}
+
+      {exportJob && (
+        <ModalOverlay onClick={closeExportModal}>
+          <ModalContent onClick={(e: any) => e.stopPropagation()}>
+            <ModalTitle>Automate Job #{exportJob.jobId}</ModalTitle>
+            <ModalSubtitle>
+              The Idios agent daemon is a small Python program you run on your own computer that watches this
+              job's status on chain and fires the right actions automatically (commit, submit_delivery,
+              approve, claim, refund, resolve). One-time setup, then walk away.
+            </ModalSubtitle>
+            <ModalNote>
+              You're tracked as <strong>{exportJob.role}</strong> on this job. Pick the role you want the daemon
+              to play below, fill in the relevant hash, and copy the generated snippet into the <code>jobs</code>
+              array of your daemon's <code>config.json</code>. Then start (or restart) your daemon.
+              {' '}
+              <a href="https://github.com/honeytones/idios/blob/main/idios-agent-daemon/README.md" target="_blank" rel="noreferrer">
+                Setup guide
+              </a>.
+            </ModalNote>
+            <ModalLabel>Role for daemon</ModalLabel>
+            <ModalSelect value={exportRole} onChange={e => setExportRole(e.target.value as 'worker' | 'requester')}>
+              <option value="worker">Worker (Bob) - commit, submit, claim</option>
+              <option value="requester">Requester (Alice) - approve, refund, claim</option>
+            </ModalSelect>
+            <ModalLabel>
+              {exportRole === 'requester'
+                ? 'Expected delivery hash (the hash you expect the worker to submit)'
+                : 'Delivery hash (the hash you will submit)'}
+            </ModalLabel>
+            <ModalInput
+              placeholder="32-byte hex, e.g. deadbeef..."
+              value={exportHash}
+              onChange={e => setExportHash(e.target.value.trim())}
+            />
+            <ModalLabel>Generated config (add to the jobs array)</ModalLabel>
+            <ConfigTextarea readOnly value={buildDaemonConfig(exportJob, exportRole, exportHash)} />
+            {copyStatus && <ModalNote style={{ color: 'rgba(140, 220, 160, 0.9)' }}>{copyStatus}</ModalNote>}
+            <ModalActions>
+              <CloseButton onClick={closeExportModal}>Close</CloseButton>
+              <CopyButton onClick={handleCopy}>Copy snippet</CopyButton>
+            </ModalActions>
+          </ModalContent>
+        </ModalOverlay>
+      )}
     </Container>
   );
 };
