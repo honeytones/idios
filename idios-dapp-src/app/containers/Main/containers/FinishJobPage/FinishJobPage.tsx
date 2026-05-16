@@ -215,22 +215,39 @@ const ErrorMsg = styled.div`
 `;
 
 const SettlementOptions = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  width: 100%;
+  display: flex;
+  gap: 0;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
 `;
 
 const SettlementCard = styled.div<{ selected: boolean }>`
-  padding: 16px;
-  border-radius: 10px;
-  border: 2px solid ${({ selected }) => selected ? '#e8e8e8' : 'rgba(255,255,255,0.1)'};
-  background: ${({ selected }) => selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)'};
+  padding: 10px 20px;
+  background: ${({ selected }) => selected ? 'rgba(255,255,255,0.08)' : 'transparent'};
+  color: ${({ selected }) => selected ? '#e8e8e8' : 'rgba(255,255,255,0.55)'};
   cursor: pointer;
-  transition: all 0.2s;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
   &:hover {
-    border-color: rgba(255,255,255,0.5);
+    color: #e8e8e8;
+    background: ${({ selected }) => selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)'};
   }
+  & + & {
+    border-left: 1px solid rgba(255,255,255,0.15);
+  }
+`;
+
+const SettlementDesc = styled.div`
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  margin-top: 4px;
+  margin-bottom: 4px;
+  line-height: 1.5;
 `;
 
 const CardTitle = styled.div`
@@ -249,7 +266,7 @@ const CardDesc = styled.div`
 const FinishJobPage: React.FC = () => {
   const navigate = useNavigate();
 
-  const [settlement, setSettlement] = useState<'fast' | 'review'>('fast');
+  const [settlement, setSettlement] = useState<'fast' | 'review'>('review');
   const [description, setDescription] = useState('');
   const [payment, setPayment] = useState('');
   const [collateral, setCollateral] = useState('');
@@ -376,19 +393,20 @@ const FinishJobPage: React.FC = () => {
       <Section>
         <SectionTitle>Settlement Type</SectionTitle>
         <SettlementOptions>
-          <SettlementCard selected={settlement === 'fast'} onClick={() => setSettlement('fast')}>
-            <CardTitle>Hash-verified Settlement</CardTitle>
-            <CardDesc>Settles immediately when you deliver matching result hash. Best for deterministic tasks.</CardDesc>
-          </SettlementCard>
           <SettlementCard selected={settlement === 'review'} onClick={() => setSettlement('review')}>
-            <CardTitle>Reviewed Settlement</CardTitle>
-            <CardDesc>Client reviews work and approves, with arbitrator backstop. Best for non deterministic or open ended tasks.</CardDesc>
+            Reviewed
+          </SettlementCard>
+          <SettlementCard selected={settlement === 'fast'} onClick={() => setSettlement('fast')}>
+            Hash-verified
           </SettlementCard>
         </SettlementOptions>
+        <SettlementDesc>
+          {settlement === 'review'
+            ? 'Client reviews work and approves, with arbitrator backstop. Best for non deterministic or open ended tasks.'
+            : 'Settles immediately when you deliver matching result hash. Best for deterministic tasks.'}
+        </SettlementDesc>
       </Section>
 
-      <TwoColumn>
-      <div>
       <Section>
         <SectionTitle>Job Details</SectionTitle>
         <Label>Description (for your client's reference, not on chain)</Label>
@@ -402,7 +420,7 @@ const FinishJobPage: React.FC = () => {
           {settlement === 'fast' && (
             <div>
               <Label>Collateral (BEAM)</Label>
-              <Input placeholder="Auto: 50% of payment" value={collateral} onChange={e => setCollateral(e.target.value)} />
+              <Input placeholder="Defaults to 50% of payment if blank" value={collateral} onChange={e => setCollateral(e.target.value)} />
             </div>
           )}
         </Row>
@@ -420,8 +438,6 @@ const FinishJobPage: React.FC = () => {
         <Input placeholder="Client's 64+ char Beam pubkey" value={requesterAddr} onChange={e => setRequesterAddr(e.target.value)} />
       </Section>
 
-      </div>
-      <div>
       {settlement === 'fast' && (
         <Section>
           <SectionTitle>Deliverable</SectionTitle>
@@ -458,8 +474,6 @@ const FinishJobPage: React.FC = () => {
           </Row>
         </Section>
       )}
-      </div>
-      </TwoColumn>
 
       {errorMsg && <ErrorMsg>{errorMsg}</ErrorMsg>}
 
