@@ -114,7 +114,8 @@ void On_user_create_a(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::CreateModeA::s_iMethod,
         &args, sizeof(args), &fc, 1, &sigKid, 1,
-        "Idios: create job (Mode A)", 0);
+        "Idios: create job (Mode A)",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -147,7 +148,8 @@ void On_user_create_b(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::CreateModeB::s_iMethod,
         &args, sizeof(args), &fc, 1, &sigKid, 1,
-        "Idios: create job (Mode B)", 0);
+        "Idios: create job (Mode B)",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -173,7 +175,8 @@ void On_user_commit(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::Commit::s_iMethod,
         &args, sizeof(args), &fc, 1, &sigKid, 1,
-        "Idios: commit to job", 0);
+        "Idios: commit to job",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -206,11 +209,13 @@ void On_user_submit_delivery(const ContractID& cid)
         fc.m_Consume = 0;
         Env::GenerateKernel(&cid, Idios::SubmitDelivery::s_iMethod,
             &args, sizeof(args), &fc, 1, &sigKid, 1,
-            "Idios: submit delivery (Mode A auto-settle)", 0);
+            "Idios: submit delivery (Mode A auto-settle)",
+        200000);
     } else {
         Env::GenerateKernel(&cid, Idios::SubmitDelivery::s_iMethod,
             &args, sizeof(args), nullptr, 0, &sigKid, 1,
-            "Idios: submit delivery (Mode B awaiting approval)", 0);
+            "Idios: submit delivery (Mode B awaiting approval)",
+        200000);
     }
 }
 
@@ -230,7 +235,8 @@ void On_user_approve(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::Approve::s_iMethod,
         &args, sizeof(args), nullptr, 0, &sigKid, 1,
-        "Idios: approve delivery", 0);
+        "Idios: approve delivery",
+        200000);
 }
 
 void On_user_claim(const ContractID& cid)
@@ -255,7 +261,8 @@ void On_user_claim(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::Claim::s_iMethod,
         &args, sizeof(args), &fc, 1, &sigKid, 1,
-        "Idios: claim settled funds", 0);
+        "Idios: claim settled funds",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -284,7 +291,8 @@ void On_user_dispute(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::Dispute::s_iMethod,
         &args, sizeof(args), &fc, 1, &sigKid, 1,
-        "Idios: dispute delivery", 0);
+        "Idios: dispute delivery",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -303,7 +311,8 @@ void On_user_claim_after_timeout(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::ClaimAfterTimeout::s_iMethod,
         &args, sizeof(args), nullptr, 0, &sigKid, 1,
-        "Idios: mark claimable after review timeout", 0);
+        "Idios: mark claimable after review timeout",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -333,7 +342,8 @@ void On_user_refund(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::Refund::s_iMethod,
         &args, sizeof(args), &fc, 1, &sigKid, 1,
-        "Idios: refund job", 0);
+        "Idios: refund job",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -351,7 +361,8 @@ void On_arbitrator_resolve_alice(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::ResolveToAlice::s_iMethod,
         &args, sizeof(args), nullptr, 0, &sigKid, 1,
-        "Idios: resolve dispute to Alice", 200000);
+        "Idios: resolve dispute to Alice",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -369,7 +380,8 @@ void On_arbitrator_resolve_bob(const ContractID& cid)
 
     Env::GenerateKernel(&cid, Idios::ResolveToBob::s_iMethod,
         &args, sizeof(args), nullptr, 0, &sigKid, 1,
-        "Idios: resolve dispute to Bob", 200000);
+        "Idios: resolve dispute to Bob",
+        200000);
 }
 
 // ----------------------------------------------------------------

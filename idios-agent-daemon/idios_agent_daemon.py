@@ -201,34 +201,34 @@ def shader_view_job(cfg, password, job_id, logger):
     return parsed.get("job") or parsed
 
 
-def shader_commit(cfg, password, job_id, collateral, logger):
+def shader_commit(cfg, password, job_id, collateral, asset_id, logger):
     args = "role=user,action=commit," + build_args(cfg, [
         ("job_id", job_id),
         ("collateral", collateral),
-        ("asset_id", 0),
+        ("asset_id", asset_id),
     ])
     rc, _, _, _ = call_shader(cfg, password, args, logger)
     return rc == 0
 
 
-def shader_submit_delivery(cfg, password, job_id, delivery_hash, mode, payment, collateral, logger):
+def shader_submit_delivery(cfg, password, job_id, delivery_hash, mode, payment, collateral, asset_id, logger):
     args = "role=user,action=submit_delivery," + build_args(cfg, [
         ("job_id", job_id),
         ("delivery_hash", delivery_hash),
         ("mode", mode),
         ("payment", payment),
         ("collateral", collateral),
-        ("asset_id", 0),
+        ("asset_id", asset_id),
     ])
     rc, _, _, _ = call_shader(cfg, password, args, logger)
     return rc == 0
 
 
-def shader_claim(cfg, password, job_id, total, logger):
+def shader_claim(cfg, password, job_id, total, asset_id, logger):
     args = "role=user,action=claim," + build_args(cfg, [
         ("job_id", job_id),
         ("total", total),
-        ("asset_id", 0),
+        ("asset_id", asset_id),
     ])
     rc, _, _, _ = call_shader(cfg, password, args, logger)
     return rc == 0
@@ -251,21 +251,21 @@ def shader_refund(cfg, password, job_id, payment, collateral, asset_id, logger):
     return rc == 0
 
 
-def shader_resolve_alice(cfg, password, job_id, total, logger):
+def shader_resolve_alice(cfg, password, job_id, total, asset_id, logger):
     args = "role=arbitrator,action=resolve_alice," + build_args(cfg, [
         ("job_id", job_id),
         ("total", total),
-        ("asset_id", 0),
+        ("asset_id", asset_id),
     ])
     rc, _, _, _ = call_shader(cfg, password, args, logger)
     return rc == 0
 
 
-def shader_resolve_bob(cfg, password, job_id, total, logger):
+def shader_resolve_bob(cfg, password, job_id, total, asset_id, logger):
     args = "role=arbitrator,action=resolve_bob," + build_args(cfg, [
         ("job_id", job_id),
         ("total", total),
-        ("asset_id", 0),
+        ("asset_id", asset_id),
     ])
     rc, _, _, _ = call_shader(cfg, password, args, logger)
     return rc == 0
@@ -301,6 +301,7 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
     payment = int(job.get("payment", 0))
     collateral = int(job.get("collateral", 0))
     mode = int(job.get("mode", MODE_A))
+    asset_id = int(job.get("asset_id", 0))
 
     if job_state.get("last_status") != status:
         logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
@@ -317,7 +318,7 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
             return
         commit_amount = int(expected_collateral)
         logger.info("job %s: firing commit, collateral=%s", job_id, commit_amount)
-        if shader_commit(cfg, password, job_id, commit_amount, logger):
+        if shader_commit(cfg, password, job_id, commit_amount, asset_id, logger):
             job_state["commit_fired"] = True
             logger.info("job %s: commit fired ok", job_id)
         else:
@@ -331,7 +332,7 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
             return
         logger.info("job %s: firing submit_delivery, mode=%s delivery_hash=%s",
                     job_id, mode, delivery_hash)
-        if shader_submit_delivery(cfg, password, job_id, delivery_hash, mode, payment, collateral, logger):
+        if shader_submit_delivery(cfg, password, job_id, delivery_hash, mode, payment, collateral, asset_id, logger):
             job_state["submit_fired"] = True
             logger.info("job %s: submit_delivery fired ok", job_id)
         else:
@@ -342,7 +343,7 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
         total = payment + collateral
         logger.info("job %s: firing claim, total=%s (payment %s + collateral %s)",
                     job_id, total, payment, collateral)
-        if shader_claim(cfg, password, job_id, total, logger):
+        if shader_claim(cfg, password, job_id, total, asset_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok, funds should be in wallet within next block",
                         job_id)
@@ -353,7 +354,7 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
     if status == STATUS_RESOLVED_TO_BOB and not job_state.get("claim_fired"):
         total = payment + collateral + int(job.get("dispute_fee", 0))
         logger.info("job %s: dispute resolved to worker, firing claim, total=%s", job_id, total)
-        if shader_claim(cfg, password, job_id, total, logger):
+        if shader_claim(cfg, password, job_id, total, asset_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok", job_id)
         else:
@@ -398,6 +399,7 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
     delivery_hash = job.get("delivery_hash", "")
     asset_id = int(job.get("asset_id", 0))
     mode = int(job.get("mode", MODE_A))
+    asset_id = int(job.get("asset_id", 0))
 
     if job_state.get("last_status") != status:
         logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
@@ -449,7 +451,7 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
         logger.info("job %s: dispute resolved to client, firing claim, total=%s "
                     "(payment %s + dispute_fee %s)",
                     job_id, total, payment, dispute_fee)
-        if shader_claim(cfg, password, job_id, total, logger):
+        if shader_claim(cfg, password, job_id, total, asset_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok", job_id)
         else:
@@ -460,7 +462,7 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
     if status == STATUS_REFUNDED and not job_state.get("claim_fired"):
         total = payment
         logger.info("job %s: Refunded, firing claim, total=%s", job_id, total)
-        if shader_claim(cfg, password, job_id, total, logger):
+        if shader_claim(cfg, password, job_id, total, asset_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok", job_id)
         else:
@@ -507,6 +509,7 @@ def handle_arbitrator_job(cfg, password, job_cfg, state, logger):
     dispute_fee = int(job.get("dispute_fee", 0))
     delivery_hash = job.get("delivery_hash", "")
     mode = int(job.get("mode", MODE_A))
+    asset_id = int(job.get("asset_id", 0))
 
     if job_state.get("last_status") != status:
         logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
@@ -535,7 +538,7 @@ def handle_arbitrator_job(cfg, password, job_cfg, state, logger):
     if str(expected).lower() == str(delivery_hash).lower():
         logger.info("job %s: delivery_hash matches expected, resolving to BOB "
                     "(worker). total=%s", job_id, total)
-        if shader_resolve_bob(cfg, password, job_id, total, logger):
+        if shader_resolve_bob(cfg, password, job_id, total, asset_id, logger):
             job_state["resolved"] = True
             logger.info("job %s: resolve_bob fired ok", job_id)
         else:
@@ -544,7 +547,7 @@ def handle_arbitrator_job(cfg, password, job_cfg, state, logger):
         logger.warning("job %s: delivery_hash mismatch, chain=%s expected=%s. "
                        "Resolving to ALICE (requester). total=%s",
                        job_id, delivery_hash, expected, total)
-        if shader_resolve_alice(cfg, password, job_id, total, logger):
+        if shader_resolve_alice(cfg, password, job_id, total, asset_id, logger):
             job_state["resolved"] = True
             logger.info("job %s: resolve_alice fired ok", job_id)
         else:
