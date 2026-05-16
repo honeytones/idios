@@ -69,23 +69,41 @@ const SectionTitle = styled.h3`
 `;
 
 const SettlementOptions = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  width: 100%;
+  display: flex;
+  gap: 0;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
 `;
 
 const SettlementCard = styled.div<{ selected: boolean }>`
-  padding: 16px;
-  border-radius: 10px;
-  border: 2px solid ${({ selected }) => selected ? '#e8e8e8' : 'rgba(255,255,255,0.1)'};
-  background: ${({ selected }) => selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)'};
+  padding: 10px 20px;
+  background: ${({ selected }) => selected ? 'rgba(255,255,255,0.08)' : 'transparent'};
+  color: ${({ selected }) => selected ? '#e8e8e8' : 'rgba(255,255,255,0.55)'};
   cursor: pointer;
-  transition: all 0.2s;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
 
   &:hover {
-    border-color: rgba(255,255,255,0.5);
+    color: #e8e8e8;
+    background: ${({ selected }) => selected ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)'};
   }
+
+  & + & {
+    border-left: 1px solid rgba(255,255,255,0.15);
+  }
+`;
+
+const SettlementDesc = styled.div`
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  margin-top: 4px;
+  margin-bottom: 4px;
+  line-height: 1.5;
 `;
 
 const CardTitle = styled.div`
@@ -316,7 +334,7 @@ const Divider = styled.div`
 
 const MainPage: React.FC = () => {
   const navigate = useNavigate();
-  const [settlement, setSettlement] = useState<'fast' | 'review'>('fast');
+  const [settlement, setSettlement] = useState<'fast' | 'review'>('review');
   const [jobId, setJobId] = useState('');
   const [nodePk, setNodePk] = useState('');
   const [payment, setPayment] = useState('');
@@ -558,18 +576,20 @@ const MainPage: React.FC = () => {
       <Section>
         <SectionTitle>Settlement Type</SectionTitle>
         <SettlementOptions>
-          <SettlementCard selected={settlement === 'fast'} onClick={() => setSettlement('fast')}>
-            <CardTitle>Hash-verified Settlement</CardTitle>
-            <CardDesc>Settles immediately when node delivers matching result hash. Best for deterministic tasks.</CardDesc>
-          </SettlementCard>
           <SettlementCard selected={settlement === 'review'} onClick={() => setSettlement('review')}>
-            <CardTitle>Reviewed Settlement</CardTitle>
-            <CardDesc>You review the work and approve, with arbitrator backstop if you dispute. Best for non deterministic or open ended tasks.</CardDesc>
+            Reviewed
+          </SettlementCard>
+          <SettlementCard selected={settlement === 'fast'} onClick={() => setSettlement('fast')}>
+            Hash-verified
           </SettlementCard>
         </SettlementOptions>
+        <SettlementDesc>
+          {settlement === 'review'
+            ? 'You review the work and approve, with arbitrator backstop if you dispute. Best for non deterministic or open ended tasks.'
+            : 'Settles immediately when node delivers matching result hash. Best for deterministic tasks.'}
+        </SettlementDesc>
       </Section>
 
-      <TwoColumn>
       <Section>
         <SectionTitle>Job Details</SectionTitle>
         <Label>Job ID</Label>
@@ -583,7 +603,7 @@ const MainPage: React.FC = () => {
           </div>
           <div>
             <Label>Collateral (BEAM) {usdEstimate(collateral)}</Label>
-            <Input placeholder="Auto: 50% of payment" value={collateral} onChange={e => setCollateral(e.target.value)} />
+            <Input placeholder="Defaults to 50% of payment if blank" value={collateral} onChange={e => setCollateral(e.target.value)} />
           </div>
         </Row>
         <Label>Expiry Block</Label>
@@ -628,7 +648,6 @@ const MainPage: React.FC = () => {
           </Row>
         </Section>
       )}
-      </TwoColumn>
 
       <SubmitButton onClick={handleSubmit} disabled={!isValid || loading}>
         {loading ? 'Creating Job...' : 'Create Job'}
