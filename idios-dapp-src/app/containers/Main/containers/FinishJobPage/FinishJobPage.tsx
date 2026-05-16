@@ -100,16 +100,6 @@ const Row = styled.div`
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 `;
-const TwoColumn = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  width: 100%;
-  @media (max-width: 700px) {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-`;
 
 const HintText = styled.div`
   font-size: 11px;
