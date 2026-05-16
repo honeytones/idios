@@ -35,18 +35,18 @@ function invokeContract(args, resolve, reject) {
     }, shader);
 }
 
-export async function createJobModeA(job_id, node_pk, result_hash, payment, expiry_block, subnet_id = 1) {
+export async function createJobModeA(job_id, node_pk, result_hash, payment, expiry_block, subnet_id = 1, asset_id = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=create_a,cid=${CID},job_id=${job_id},subnet_id=${subnet_id},epoch=1,expiry_block=${expiry_block},payment=${payment},asset_id=0,node_pk=${node_pk},result_hash=${result_hash}`;
+        const args = `role=user,action=create_a,cid=${CID},job_id=${job_id},subnet_id=${subnet_id},epoch=1,expiry_block=${expiry_block},payment=${payment},asset_id=${asset_id},node_pk=${node_pk},result_hash=${result_hash}`;
         invokeContract(args, resolve, reject);
     });
 }
 
-export async function createJobModeB(job_id, node_pk, payment, dispute_fee, expiry_block, review_window_blocks, subnet_id = 1) {
+export async function createJobModeB(job_id, node_pk, payment, dispute_fee, expiry_block, review_window_blocks, subnet_id = 1, asset_id = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=create_b,cid=${CID},job_id=${job_id},subnet_id=${subnet_id},epoch=1,expiry_block=${expiry_block},review_window_blocks=${review_window_blocks},payment=${payment},dispute_fee=${dispute_fee},asset_id=0,node_pk=${node_pk}`;
+        const args = `role=user,action=create_b,cid=${CID},job_id=${job_id},subnet_id=${subnet_id},epoch=1,expiry_block=${expiry_block},review_window_blocks=${review_window_blocks},payment=${payment},dispute_fee=${dispute_fee},asset_id=${asset_id},node_pk=${node_pk}`;
         invokeContract(args, resolve, reject);
     });
 }
@@ -55,18 +55,18 @@ export async function createJob(job_id, node_pk, result_hash, payment, expiry_bl
     return createJobModeA(job_id, node_pk, result_hash, payment, expiry_block, subnet_id);
 }
 
-export async function commitJob(job_id, collateral) {
+export async function commitJob(job_id, collateral, asset_id = 0) {
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=commit,cid=${CID},job_id=${job_id},collateral=${collateral},asset_id=0`;
+        const args = `role=user,action=commit,cid=${CID},job_id=${job_id},collateral=${collateral},asset_id=${asset_id}`;
         invokeContract(args, resolve, reject);
     });
 }
 
-export async function submitDelivery(job_id, delivery_hash, mode, payment, collateral) {
+export async function submitDelivery(job_id, delivery_hash, mode, payment, collateral, asset_id = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
         const modeNum = mode === 'A' ? 65 : 66;
-        const args = `role=user,action=submit_delivery,cid=${CID},job_id=${job_id},delivery_hash=${delivery_hash},mode=${modeNum},payment=${payment},collateral=${collateral},asset_id=0`;
+        const args = `role=user,action=submit_delivery,cid=${CID},job_id=${job_id},delivery_hash=${delivery_hash},mode=${modeNum},payment=${payment},collateral=${collateral},asset_id=${asset_id}`;
         invokeContract(args, resolve, reject);
     });
 }
@@ -79,10 +79,10 @@ export async function approveJob(job_id) {
     });
 }
 
-export async function disputeJob(job_id, dispute_fee) {
+export async function disputeJob(job_id, dispute_fee, asset_id = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=dispute,cid=${CID},job_id=${job_id},dispute_fee=${dispute_fee},asset_id=0`;
+        const args = `role=user,action=dispute,cid=${CID},job_id=${job_id},dispute_fee=${dispute_fee},asset_id=${asset_id}`;
         invokeContract(args, resolve, reject);
     });
 }
@@ -103,10 +103,10 @@ export async function refundJob(job_id, payment, collateral, asset_id = 0) {
     });
 }
 
-export async function claimJob(job_id, total) {
+export async function claimJob(job_id, total, asset_id = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=user,action=claim,cid=${CID},job_id=${job_id},total=${total},asset_id=0`;
+        const args = `role=user,action=claim,cid=${CID},job_id=${job_id},total=${total},asset_id=${asset_id}`;
         invokeContract(args, resolve, reject);
     });
 }
@@ -147,18 +147,18 @@ export async function getUserKey() {
         }, shader);
     });
 }
-export async function resolveToAlice(job_id, total) {
+export async function resolveToAlice(job_id, total, asset_id = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=arbitrator,action=resolve_alice,cid=${CID},job_id=${job_id},total=${total},asset_id=0`;
+        const args = `role=arbitrator,action=resolve_alice,cid=${CID},job_id=${job_id},total=${total},asset_id=${asset_id}`;
         invokeContract(args, resolve, reject);
     });
 }
 
-export async function resolveToBob(job_id, total) {
+export async function resolveToBob(job_id, total, asset_id = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=arbitrator,action=resolve_bob,cid=${CID},job_id=${job_id},total=${total},asset_id=0`;
+        const args = `role=arbitrator,action=resolve_bob,cid=${CID},job_id=${job_id},total=${total},asset_id=${asset_id}`;
         invokeContract(args, resolve, reject);
     });
 }

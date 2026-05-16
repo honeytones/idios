@@ -437,6 +437,10 @@ const grothToBeam = (groth: number): string => {
   return (groth / 1e8).toFixed(8).replace(/\.?0+$/, '');
 };
 
+const assetLabel = (assetId: number | undefined): string => {
+  return assetId === 47 ? 'NPH' : 'BEAM';
+};
+
 const MyJobsPage: React.FC = () => {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<JobWithState[]>([]);
@@ -509,7 +513,7 @@ const MyJobsPage: React.FC = () => {
       if (job.state.status === 6 || job.state.status === 7) {
         total += dispute_fee;
       }
-      await claimJob(job.jobId, total);
+      await claimJob(job.jobId, total, job.state.asset_id || 0);
       setTimeout(() => loadJobs(), 3000);
     } catch (err) {
       console.error('Claim failed:', err);
@@ -550,7 +554,7 @@ const MyJobsPage: React.FC = () => {
     setDisputingId(job.jobId);
     try {
       const dispute_fee = job.state.dispute_fee || 0;
-      await disputeJob(job.jobId, dispute_fee);
+      await disputeJob(job.jobId, dispute_fee, job.state.asset_id || 0);
       setTimeout(() => loadJobs(), 3000);
     } catch (err) {
       console.error('Dispute failed:', err);
@@ -672,11 +676,11 @@ const MyJobsPage: React.FC = () => {
             </StatusBadge>
           </JobHeader>
           <JobDetail>Role: {job.role}</JobDetail>
-          {job.payment && <JobDetail>Payment: {job.payment} BEAM</JobDetail>}
+          {job.payment && <JobDetail>Payment: {job.payment} {job.state ? assetLabel(job.state.asset_id) : 'BEAM'}</JobDetail>}
           {job.state && (
             <>
               {job.state.collateral !== undefined && (
-                <JobDetail>Collateral on chain: {grothToBeam(job.state.collateral)} BEAM</JobDetail>
+                <JobDetail>Collateral on chain: {grothToBeam(job.state.collateral)} {assetLabel(job.state.asset_id)}</JobDetail>
               )}
               {job.state.expiry_block !== undefined && (
                 <JobDetail>Expiry block: {job.state.expiry_block}</JobDetail>

@@ -325,6 +325,7 @@ const Divider = styled.div`
 const MainPage: React.FC = () => {
   const navigate = useNavigate();
   const [settlement, setSettlement] = useState<'fast' | 'review'>('review');
+  const [assetId, setAssetId] = useState<0 | 47>(0);
   const [jobId, setJobId] = useState('');
   const [nodePk, setNodePk] = useState('');
   const [payment, setPayment] = useState('');
@@ -446,7 +447,9 @@ const MainPage: React.FC = () => {
           nodePk,
           resultHash,
           paymentGroth,
-          parseInt(expiryBlock)
+          parseInt(expiryBlock),
+          1,
+          assetId
         );
       } else {
         const disputeFeeGroth = beamToGroth(disputeFee);
@@ -456,7 +459,9 @@ const MainPage: React.FC = () => {
           paymentGroth,
           disputeFeeGroth,
           parseInt(expiryBlock),
-          parseInt(reviewWindow)
+          parseInt(reviewWindow),
+          1,
+          assetId
         );
       }
       // Track this job locally for "My Jobs" view
@@ -581,6 +586,23 @@ const MainPage: React.FC = () => {
       </Section>
 
       <Section>
+        <SectionTitle>Payment Asset</SectionTitle>
+        <SettlementOptions>
+          <SettlementCard selected={assetId === 0} onClick={() => setAssetId(0)}>
+            BEAM
+          </SettlementCard>
+          <SettlementCard selected={assetId === 47} onClick={() => setAssetId(47)}>
+            NPH
+          </SettlementCard>
+        </SettlementOptions>
+        <SettlementDesc>
+          {assetId === 47
+            ? 'Nephrite (NPH) is a USD-pegged confidential stablecoin on Beam. 1 NPH = 1 USD. Get NPH via the Beam DEX before creating this job.'
+            : 'BEAM is the native Beam token. Price fluctuates with market.'}
+        </SettlementDesc>
+      </Section>
+
+      <Section>
         <SectionTitle>Job Details</SectionTitle>
         <Label>Job ID</Label>
         <Input placeholder="e.g. 111" value={jobId} onChange={e => setJobId(e.target.value)} />
@@ -588,11 +610,11 @@ const MainPage: React.FC = () => {
         <Input placeholder="Node pubkey provided by the operator" value={nodePk} onChange={e => setNodePk(e.target.value)} />
         <Row>
           <div>
-            <Label>Payment (BEAM) {usdEstimate(payment)}</Label>
+            <Label>Payment ({assetId === 47 ? 'NPH' : 'BEAM'}){assetId === 0 ? ' ' + usdEstimate(payment) : ''}</Label>
             <Input placeholder="e.g. 500" value={payment} onChange={e => handlePaymentChange(e.target.value)} />
           </div>
           <div>
-            <Label>Collateral (BEAM) {usdEstimate(collateral)}</Label>
+            <Label>Collateral ({assetId === 47 ? 'NPH' : 'BEAM'}){assetId === 0 ? ' ' + usdEstimate(collateral) : ''}</Label>
             <Input placeholder="Defaults to 50% of payment if blank" value={collateral} onChange={e => setCollateral(e.target.value)} />
           </div>
         </Row>
