@@ -160,9 +160,10 @@ void On_user_commit(const ContractID& cid)
 {
     Idios::Commit args;
     Env::Memset(&args, 0, sizeof(args));
-    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+    if (!Env::DocGetNum64("job_id",     &args.job_id))     return On_error("job_id required");
+    if (!Env::DocGetNum64("collateral", &args.collateral)) return On_error("collateral required");
 
-    // Load Job from chain to get collateral and asset_id
+    // Load Job from chain to get asset_id (worker cannot mismatch asset)
     struct KeyJob {
         uint8_t  prefix;
         uint64_t job_id;
@@ -175,13 +176,14 @@ void On_user_commit(const ContractID& cid)
     k.m_KeyInContract = key;
     Idios::Job job;
     if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
+    args.asset_id = job.asset_id;
 
     UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
     FundsChange fc;
-    fc.m_Amount  = job.collateral;
+    fc.m_Amount  = args.collateral;
     fc.m_Aid     = job.asset_id;
     fc.m_Consume = 1;
 
