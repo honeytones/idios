@@ -190,22 +190,28 @@ void On_user_submit_delivery(const ContractID& cid)
     if (!Env::DocGetNum64("job_id",        &args.job_id))                   return On_error("job_id required");
     if (!Env::DocGetBlob("delivery_hash",  args.delivery_hash, 32))         return On_error("delivery_hash required");
 
-    uint64_t payment = 0, collateral = 0;
-    uint32_t asset_id = 0;
-    uint32_t mode = 0;
-    Env::DocGetNum64("payment", &payment);
-    Env::DocGetNum64("collateral", &collateral);
-    Env::DocGetNum32("asset_id", &asset_id);
-    Env::DocGetNum32("mode", &mode);
+    // Load Job from chain to get mode, payment, collateral, asset_id
+    struct KeyJob {
+        uint8_t  prefix;
+        uint64_t job_id;
+    } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
+    key.job_id = args.job_id;
+    Env::Key_T<KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
 
     UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    if (mode == 'A') {
+    if (job.mode == 'A') {
         FundsChange fc;
-        fc.m_Amount  = payment + collateral;
-        fc.m_Aid     = asset_id;
+        fc.m_Amount  = job.payment + job.collateral;
+        fc.m_Aid     = job.asset_id;
         fc.m_Consume = 0;
         Env::GenerateKernel(&cid, Idios::SubmitDelivery::s_iMethod,
             &args, sizeof(args), &fc, 1, &sigKid, 1,
@@ -245,10 +251,24 @@ void On_user_claim(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    uint64_t total = 0;
-    uint32_t asset_id = 0;
-    Env::DocGetNum64("total", &total);
-    Env::DocGetNum32("asset_id", &asset_id);
+    struct KeyJob {
+        uint8_t  prefix;
+        uint64_t job_id;
+    } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
+    key.job_id = args.job_id;
+    Env::Key_T<KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
+    if (job.mode == 'A') return On_error("Mode A jobs auto-settle, no claim needed");
+
+    uint64_t total = job.payment + job.collateral;
+    if ((uint32_t)job.status == 6 || (uint32_t)job.status == 7) {
+        total += job.dispute_fee;
+    }
 
     UserKeyID kid;
     kid.m_Cid = cid;
@@ -256,7 +276,7 @@ void On_user_claim(const ContractID& cid)
 
     FundsChange fc;
     fc.m_Amount  = total;
-    fc.m_Aid     = asset_id;
+    fc.m_Aid     = job.asset_id;
     fc.m_Consume = 0;
 
     Env::GenerateKernel(&cid, Idios::Claim::s_iMethod,

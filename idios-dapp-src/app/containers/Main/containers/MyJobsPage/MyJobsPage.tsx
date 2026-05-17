@@ -698,7 +698,7 @@ const MyJobsPage: React.FC = () => {
               </ActionButton>
             )}
             {job.state && (
-              (job.state.status === 4 && job.role === 'worker') ||
+              (job.state.status === 4 && job.role === 'worker' && job.state.mode !== 65) ||
               (job.state.status === 7 && job.role === 'worker') ||
               (job.state.status === 6 && job.role === 'requester')
             ) && (
