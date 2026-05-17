@@ -160,17 +160,29 @@ void On_user_commit(const ContractID& cid)
 {
     Idios::Commit args;
     Env::Memset(&args, 0, sizeof(args));
-    if (!Env::DocGetNum64("job_id",     &args.job_id))     return On_error("job_id required");
-    if (!Env::DocGetNum64("collateral", &args.collateral)) return On_error("collateral required");
-    if (!Env::DocGetNum32("asset_id",   &args.asset_id))   return On_error("asset_id required");
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    // Load Job from chain to get collateral and asset_id
+    struct KeyJob {
+        uint8_t  prefix;
+        uint64_t job_id;
+    } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
+    key.job_id = args.job_id;
+    Env::Key_T<KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
 
     UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
     FundsChange fc;
-    fc.m_Amount  = args.collateral;
-    fc.m_Aid     = args.asset_id;
+    fc.m_Amount  = job.collateral;
+    fc.m_Aid     = job.asset_id;
     fc.m_Consume = 1;
 
     Env::GenerateKernel(&cid, Idios::Commit::s_iMethod,
@@ -295,18 +307,27 @@ void On_user_dispute(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    uint64_t dispute_fee = 0;
-    uint32_t asset_id = 0;
-    Env::DocGetNum64("dispute_fee", &dispute_fee);
-    Env::DocGetNum32("asset_id", &asset_id);
+    // Load Job from chain to get dispute_fee and asset_id
+    struct KeyJob {
+        uint8_t  prefix;
+        uint64_t job_id;
+    } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
+    key.job_id = args.job_id;
+    Env::Key_T<KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
 
     UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
     FundsChange fc;
-    fc.m_Amount  = dispute_fee;
-    fc.m_Aid     = asset_id;
+    fc.m_Amount  = job.dispute_fee;
+    fc.m_Aid     = job.asset_id;
     fc.m_Consume = 1;
 
     Env::GenerateKernel(&cid, Idios::Dispute::s_iMethod,
@@ -345,19 +366,27 @@ void On_user_refund(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    uint64_t payment = 0, collateral = 0;
-    uint32_t asset_id = 0;
-    Env::DocGetNum64("payment", &payment);
-    Env::DocGetNum64("collateral", &collateral);
-    Env::DocGetNum32("asset_id", &asset_id);
+    // Load Job from chain to get payment, collateral and asset_id
+    struct KeyJob {
+        uint8_t  prefix;
+        uint64_t job_id;
+    } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
+    key.job_id = args.job_id;
+    Env::Key_T<KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
 
     UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID sigKid(&kid, sizeof(kid));
 
     FundsChange fc;
-    fc.m_Amount  = payment + collateral;
-    fc.m_Aid     = asset_id;
+    fc.m_Amount  = job.payment + job.collateral;
+    fc.m_Aid     = job.asset_id;
     fc.m_Consume = 0;
 
     Env::GenerateKernel(&cid, Idios::Refund::s_iMethod,
