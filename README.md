@@ -179,7 +179,7 @@ The worker's pubkey is contract-specific (because the CID is part of the key der
 
 The output is the worker's `node_pk` for that contract. Send this to the requester.
 
-### View a job
+### View a contract
 
 ```bash
 ./beam-wallet shader \
@@ -327,7 +327,7 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 ## Agent runtime daemon
 
-`idios-agent-daemon/` in this repo is a small Python daemon that automates your role in an Idios job. Polls the chain, watches your tracked contracts, fires the right contract call when the state machine advances. Run on your own machine alongside a Beam CLI wallet, type the password once at startup, walk away.
+`idios-agent-daemon/` in this repo is a small Python daemon that automates your role in an Idios contract. Polls the chain, watches your tracked contracts, fires the right contract call when the state machine advances. Run on your own machine alongside a Beam CLI wallet, type the password once at startup, walk away.
 
 Supports all three Idios roles:
 
@@ -347,7 +347,7 @@ This roadmap is partner-driven. Phase 1 is the next planned release. Everything 
 
 **Phase 1 (next): Multi-arbitrator dispute resolution**
 
-- [ ] Per-job arbitrator set (up to 5 pubkeys, M of N threshold) in v4 contract
+- [ ] Per-contract arbitrator set (up to 5 pubkeys, M of N threshold) in v4 contract
 - [ ] New sig_count and sig_indices args on resolve_alice and resolve_bob
 - [ ] Default fallback to contract-level arbitrator for backward compatibility
 - [ ] v4 contract deployed on Beam mainnet alongside v3 (jobs in flight on v3 continue on v3)
@@ -361,7 +361,7 @@ This roadmap is partner-driven. Phase 1 is the next planned release. Everything 
 
 **Phase 2: Payload delivery and asset diversity**
 
-- [ ] Job specifications and deliverables sent via IPFS through Beam's private IPFS network
+- [ ] Contract specifications and deliverables sent via IPFS through Beam's private IPFS network
 - [ ] Encrypted payloads with keys exchanged out of band
 - [ ] Larger work files supported beyond what fits in a hash
 - [x] Confidential asset support: BEAM and NPH (Nephrite USD-pegged stablecoin) shipped in v3.1.x
