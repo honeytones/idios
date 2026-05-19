@@ -315,6 +315,8 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 **Two phase claim.** Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the contract status. The beneficiary then calls Method_15 Claim signed with their own key to actually receive the funds. This works around a Beam BVM constraint where one kernel can't cleanly sign for one party while routing funds to a different party.
 
+**Arbitrator contact.** To reach the arbitrator for dispute resolution, message **@tappyoak** on Telegram. Include the contract ID, your role, and a brief description of the dispute.
+
 **Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The dapp ships an in-dapp arbitrator console so the arbitrator can track and resolve Disputed contracts from the UI. M of N multi-arbitrator resolution comes in Phase 1 (v4 contract).
 
 **Contract-specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
