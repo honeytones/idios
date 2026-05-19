@@ -353,12 +353,6 @@ This roadmap is partner-driven. Phase 1 is the next planned release. Everything 
 - [ ] v4 contract deployed on Beam mainnet alongside v3 (jobs in flight on v3 continue on v3)
 - [ ] Dapp UI for arbitrator config in Start a Contract flow plus co-signing in arbitrator console
 
-**Phase 1.5: ERC-8183 semantic alignment**
-
-- [ ] Rename Requester / Worker / Arbitrator to Client / Provider / Evaluator across dapp UI and docs
-- [ ] Document Job lifecycle vocabulary (Open, Funded, Submitted, Terminal) alongside Idios native status codes
-- [ ] Migration guide for marketplaces moving from Idios naming to ERC-8183 naming
-
 **Phase 2: Payload delivery and asset diversity**
 
 - [ ] Contract specifications and deliverables sent via IPFS through Beam's private IPFS network
