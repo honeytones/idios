@@ -12,7 +12,7 @@ Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on
 
 ## Why
 
-Public payment rails leak. Every job, every payment, every counterparty becomes part of a permanent searchable record. For AI inference, model training, scientific compute, work that involves proprietary inputs, private data, or competitive operations, that visibility is a dealbreaker.
+Public payment rails leak. Every contract, every payment, every counterparty becomes part of a permanent searchable record. For AI inference, model training, scientific compute, work that involves proprietary inputs, private data, or competitive operations, that visibility is a dealbreaker.
 
 Idios solves the payment and settlement privacy problem. Payment is locked in private escrow on [Beam](https://beam.mw). The worker locks collateral as a performance bond. Settlement happens on chain with full privacy of amounts and parties. Beam's MimbleWimble protocol hides amounts and identities at the base layer. Idios is escrow built on top.
 
@@ -22,7 +22,7 @@ The primitive Idios implements is the same one ERC-8183 standardises on Ethereum
 
 ## How it works
 
-Two settlement modes, picked per job at creation time.
+Two settlement modes, picked per contract at creation time.
 
 ### Hash-verified Settlement (Mode A)
 
@@ -52,7 +52,7 @@ Funds always flow to the right party. The arbitrator can decide who wins a dispu
 
 ### Two phase claim
 
-Idios v3 uses a two phase claim pattern. Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the job status but never move funds. The beneficiary then calls `claim` to actually receive the payout, signed by their own key. This works around a Beam BVM constraint where a single kernel cannot cleanly sign for one party while routing funds to another.
+Idios v3 uses a two phase claim pattern. Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the contract status but never move funds. The beneficiary then calls `claim` to actually receive the payout, signed by their own key. This works around a Beam BVM constraint where a single kernel cannot cleanly sign for one party while routing funds to another.
 
 ---
 
@@ -62,7 +62,7 @@ Idios v3 uses a two phase claim pattern. Authorisation methods (approve, resolve
 
 - v3 contract deployed at block 3842196 (May 2, 2026)
 - Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds
-- Dapp v3.0.7 published, supports both modes via UI
+- Dapp v3.1.5 published, supports both modes via UI
 
 **Verified resolution paths (real funds, mainnet):**
 
@@ -89,7 +89,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 
 | Role | Description |
 |------|-------------|
-| `user` | Requester (Alice) or worker (Bob) interacting with the job lifecycle |
+| `user` | Requester (Alice) or worker (Bob) interacting with the contract lifecycle |
 | `arbitrator` | Single on-chain arbitrator (set at deploy) who can resolve disputes |
 | `manager` | Deploy and view contract params (one-shot, used during contract setup) |
 
@@ -99,15 +99,15 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 
 | Action | Description |
 |--------|-------------|
-| `create_a` | Create a Mode A job (Hash-verified Settlement). Locks payment. |
-| `create_b` | Create a Mode B job (Reviewed Settlement). Locks payment, sets review window and dispute fee. |
+| `create_a` | Create a Mode A contract (Hash-verified Settlement). Locks payment. |
+| `create_b` | Create a Mode B contract (Reviewed Settlement). Locks payment, sets review window and dispute fee. |
 | `commit` | Worker locks collateral, status moves to Active. |
 | `submit_delivery` | Worker submits result hash. In Mode A, settles atomically if hash matches. In Mode B, sets AwaitingApproval. |
 | `approve` | Requester approves Mode B delivery, status moves to Settled (no funds yet). |
 | `dispute` | Requester disputes Mode B delivery, locks dispute fee, status moves to Disputed. |
 | `claim_after_timeout` | Worker claims after review window expires (Mode B), status moves to Settled. |
-| `claim` | Beneficiary collects funds from a Settled, ResolvedToBob, or ResolvedToAlice job. Status moves to Closed. |
-| `refund` | Requester reclaims funds from an expired Open job. Status moves to Refunded. |
+| `claim` | Beneficiary collects funds from a Settled, ResolvedToBob, or ResolvedToAlice contract. Status moves to Closed. |
+| `refund` | Requester reclaims funds from an expired Open contract. Status moves to Refunded. |
 | `view_job` | Read current job state. |
 | `get_key` | Returns the user's pubkey for this contract. (Worker shares this with requester before create.) |
 
@@ -115,8 +115,8 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 
 | Action | Description |
 |--------|-------------|
-| `resolve_alice` | Resolve a Disputed job in favour of the requester. Status moves to ResolvedToAlice. |
-| `resolve_bob` | Resolve a Disputed job in favour of the worker. Status moves to ResolvedToBob. |
+| `resolve_alice` | Resolve a Disputed contract in favour of the requester. Status moves to ResolvedToAlice. |
+| `resolve_bob` | Resolve a Disputed contract in favour of the worker. Status moves to ResolvedToBob. |
 | `get_key` | Returns the arbitrator's pubkey for this contract. |
 
 ### Status codes
@@ -146,11 +146,11 @@ The simplest way to use Idios is through the Beam Desktop wallet's dapp store.
 
 The dapp opens to a landing page with three entry points:
 
-- **Start a job**: As a requester, fill in deal terms (job ID, payment, expiry, worker pubkey). Choose Hash-verified Settlement (upload deliverable file, dapp computes SHA-256 hash locally) or Reviewed Settlement (set review window and dispute fee). Create the job. If you arrived via an offer link from a worker, the form auto-fills.
-- **Generate a job offer**: As a worker, fill in the agreed deal terms, upload your finished deliverable (Mode A) or set review settings (Mode B), and click Generate Offer. Produces a shareable text block and link for sending to the requester.
-- **My jobs**: See live status of every job tracked locally. Action buttons appear conditionally: Refund expired jobs, Approve or Dispute Mode B deliveries, Claim Funds when a job is Settled or Resolved in your favour.
+- **Start a contract**: As a requester, fill in deal terms (contract ID, payment, expiry, worker pubkey). Choose Hash-verified Settlement (upload deliverable file, dapp computes SHA-256 hash locally) or Reviewed Settlement (set review window and dispute fee). Create the contract. If you arrived via an offer link from a worker, the form auto-fills.
+- **Generate a contract offer**: As a worker, fill in the agreed deal terms, upload your finished deliverable (Mode A) or set review settings (Mode B), and click Generate Offer. Produces a shareable text block and link for sending to the requester.
+- **My contracts**: See live status of every contract tracked locally. Action buttons appear conditionally: Refund expired contracts, Approve or Dispute Mode B deliveries, Claim Funds when a contract is Settled or Resolved in your favour.
 
-> Note on expiry block: Beam mainnet produces a block roughly every 60 seconds. Set `expiry_block` to at least `current_block + 200` to give the create transaction time to confirm before expiry. For real jobs, `current_block + 1440` (~24 hours) is more typical.
+> Note on expiry block: Beam mainnet produces a block roughly every 60 seconds. Set `expiry_block` to at least `current_block + 200` to give the create transaction time to confirm before expiry. For real contracts, `current_block + 1440` (~24 hours) is more typical.
 
 ---
 
@@ -188,7 +188,7 @@ The output is the worker's `node_pk` for that contract. Send this to the request
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-### Create a Mode A job (Hash-verified Settlement)
+### Create a Mode A contract (Hash-verified Settlement)
 
 ```bash
 ./beam-wallet shader \
@@ -199,7 +199,7 @@ The output is the worker's `node_pk` for that contract. Send this to the request
 
 Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` is 0.05 BEAM.
 
-### Create a Mode B job (Reviewed Settlement)
+### Create a Mode B contract (Reviewed Settlement)
 
 ```bash
 ./beam-wallet shader \
@@ -275,7 +275,7 @@ After Settled, ResolvedToBob, or ResolvedToAlice, the beneficiary calls `claim`.
 
 ### Refund (requester, after expiry)
 
-For an Open job whose `expiry_block` has passed without anyone committing.
+For an Open contract whose `expiry_block` has passed without anyone committing.
 
 ```bash
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
@@ -313,9 +313,9 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 ## Architecture notes
 
-**Two phase claim.** Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the job status. The beneficiary then calls Method_15 Claim signed with their own key to actually receive the funds. This works around a Beam BVM constraint where one kernel can't cleanly sign for one party while routing funds to a different party.
+**Two phase claim.** Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the contract status. The beneficiary then calls Method_15 Claim signed with their own key to actually receive the funds. This works around a Beam BVM constraint where one kernel can't cleanly sign for one party while routing funds to a different party.
 
-**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The dapp ships an in-dapp arbitrator console (since v3.0.8) so the arbitrator can track and resolve Disputed jobs from the UI. M of N multi-arbitrator resolution comes in Phase 1 (v4 contract).
+**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The dapp ships an in-dapp arbitrator console so the arbitrator can track and resolve Disputed contracts from the UI. M of N multi-arbitrator resolution comes in Phase 1 (v4 contract).
 
 **Contract-specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
 
@@ -327,7 +327,7 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 ## Agent runtime daemon
 
-`idios-agent-daemon/` in this repo is a small Python daemon that automates your role in an Idios job. Polls the chain, watches your tracked jobs, fires the right contract call when the state machine advances. Run on your own machine alongside a Beam CLI wallet, type the password once at startup, walk away.
+`idios-agent-daemon/` in this repo is a small Python daemon that automates your role in an Idios job. Polls the chain, watches your tracked contracts, fires the right contract call when the state machine advances. Run on your own machine alongside a Beam CLI wallet, type the password once at startup, walk away.
 
 Supports all three Idios roles:
 
@@ -335,9 +335,9 @@ Supports all three Idios roles:
 - **Client** (Alice / requester): hash-match auto-approve, claim on dispute won or refund.
 - **Arbitrator**: hash-match auto-resolve in Mode B disputes (`resolve_bob` on match, `resolve_alice` on mismatch).
 
-Tested end to end on Beam mainnet against the live v3 contract. Three test artifacts on chain demonstrate each role: jobs 22227 (Mode A worker), 22228 (Mode B worker + client), 22229 (Mode B arbitrator resolving a malicious dispute).
+Tested end to end on Beam mainnet against the live v3 contract. Three test artifacts on chain demonstrate each role: contracts 22227 (Mode A worker), 22228 (Mode B worker + client), 22229 (Mode B arbitrator resolving a malicious dispute).
 
-The dapp's My Jobs page has an **Automate this job** button on each tracked job card that generates a daemon config snippet you can paste straight into the daemon's config. See [`idios-agent-daemon/README.md`](./idios-agent-daemon/README.md) for setup and configuration.
+The dapp's My Contracts page has an **Automate this contract** button on each tracked contract card that generates a daemon config snippet you can paste straight into the daemon's config. See [`idios-agent-daemon/README.md`](./idios-agent-daemon/README.md) for setup and configuration.
 
 ---
 
@@ -351,7 +351,7 @@ This roadmap is partner-driven. Phase 1 is the next planned release. Everything 
 - [ ] New sig_count and sig_indices args on resolve_alice and resolve_bob
 - [ ] Default fallback to contract-level arbitrator for backward compatibility
 - [ ] v4 contract deployed on Beam mainnet alongside v3 (jobs in flight on v3 continue on v3)
-- [ ] Dapp UI for arbitrator config in Start a Job flow plus co-signing in arbitrator console
+- [ ] Dapp UI for arbitrator config in Start a Contract flow plus co-signing in arbitrator console
 
 **Phase 1.5: ERC-8183 semantic alignment**
 
@@ -364,7 +364,7 @@ This roadmap is partner-driven. Phase 1 is the next planned release. Everything 
 - [ ] Job specifications and deliverables sent via IPFS through Beam's private IPFS network
 - [ ] Encrypted payloads with keys exchanged out of band
 - [ ] Larger work files supported beyond what fits in a hash
-- [ ] Confidential asset support beyond BEAM (Nephrite-issued assets, others)
+- [x] Confidential asset support: BEAM and NPH (Nephrite USD-pegged stablecoin) shipped in v3.1.x
 
 **Phase 3+: Future research (partner-driven)**
 

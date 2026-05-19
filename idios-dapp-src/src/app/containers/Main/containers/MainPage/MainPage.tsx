@@ -477,10 +477,10 @@ const MainPage: React.FC = () => {
         console.error('Could not track job:', err);
       }
 
-      setStatus(`Job ${jobId} created successfully. Share Job ID and your pubkey with the node operator.`);
+      setStatus(`Contract ${jobId} created successfully. Share Contract ID and your pubkey with the node operator.`);
     } catch (err: any) {
       setIsError(true);
-      setStatus(err.message || 'Failed to create job');
+      setStatus(err.message || 'Failed to create contract');
     } finally {
       setLoading(false);
     }
@@ -500,7 +500,7 @@ const MainPage: React.FC = () => {
       }
       setJobInfo(result);
     } catch (err: any) {
-      setViewError(err.message || 'Failed to load job');
+      setViewError(err.message || 'Failed to load contract');
     } finally {
       setViewLoading(false);
     }
@@ -548,7 +548,7 @@ const MainPage: React.FC = () => {
         ))}
         <ButtonRow>
           <DangerButton onClick={handleRefund} disabled={refundLoading}>
-            {refundLoading ? 'Refunding...' : '↩ Refund Job'}
+            {refundLoading ? 'Refunding...' : '↩ Refund Contract'}
           </DangerButton>
         </ButtonRow>
         {refundStatus && (
@@ -563,8 +563,8 @@ const MainPage: React.FC = () => {
       <BackLink onClick={() => navigate(ROUTES_FULL.MAIN.LANDING)}>← Back</BackLink>
       {offerFrom && (
         <OfferBanner>
-          <OfferBannerLabel>Job Offer Received</OfferBannerLabel>
-          This job was prepared by {offerFrom.slice(0, 12)}...{offerFrom.slice(-8)}. Please review the details before creating the job.
+          <OfferBannerLabel>Contract Offer Received</OfferBannerLabel>
+          This contract was prepared by {offerFrom.slice(0, 12)}...{offerFrom.slice(-8)}. Please review the details before creating the contract.
         </OfferBanner>
       )}
 
@@ -597,14 +597,14 @@ const MainPage: React.FC = () => {
         </SettlementOptions>
         <SettlementDesc>
           {assetId === 47
-            ? 'Nephrite (NPH) is a USD-pegged confidential stablecoin on Beam. 1 NPH = 1 USD. Get NPH via the Beam DEX before creating this job.'
+            ? 'Nephrite (NPH) is a USD-pegged confidential stablecoin on Beam. 1 NPH = 1 USD. Get NPH via the Beam DEX before creating this contract.'
             : 'BEAM is the native Beam token. Price fluctuates with market.'}
         </SettlementDesc>
       </Section>
 
       <Section>
-        <SectionTitle>Job Details</SectionTitle>
-        <Label>Job ID</Label>
+        <SectionTitle>Contract Details</SectionTitle>
+        <Label>Contract ID</Label>
         <Input placeholder="e.g. 111" value={jobId} onChange={e => setJobId(e.target.value)} />
         <Label>Node Beam Public Key</Label>
         <Input placeholder="Node pubkey provided by the operator" value={nodePk} onChange={e => setNodePk(e.target.value)} />
@@ -662,7 +662,7 @@ const MainPage: React.FC = () => {
       )}
 
       <SubmitButton onClick={handleSubmit} disabled={!isValid || loading}>
-        {loading ? 'Creating Job...' : 'Create Job'}
+        {loading ? 'Creating Contract...' : 'Create Contract'}
       </SubmitButton>
 
       {status && <StatusMsg error={isError}>{status}</StatusMsg>}
@@ -670,10 +670,10 @@ const MainPage: React.FC = () => {
       <Divider />
 
       <Section>
-        <SectionTitle>View / Refund Job</SectionTitle>
+        <SectionTitle>View / Refund Contract</SectionTitle>
         <Row>
           <div>
-            <Label>Job ID</Label>
+            <Label>Contract ID</Label>
             <Input
               placeholder="e.g. 111"
               value={viewJobId}
@@ -682,7 +682,7 @@ const MainPage: React.FC = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '12px' }}>
             <SecondaryButton onClick={handleViewJob} disabled={!viewJobId || viewLoading}>
-              {viewLoading ? 'Loading...' : '🔍 View Job'}
+              {viewLoading ? 'Loading...' : '🔍 View Contract'}
             </SecondaryButton>
           </div>
         </Row>

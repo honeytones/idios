@@ -332,7 +332,7 @@ const FinishJobPage: React.FC = () => {
 
     const settlementLabel = settlement === 'fast' ? 'Hash-verified Settlement (Mode A)' : 'Reviewed Settlement (Mode B)';
     const lines = [
-      '== Idios Job Offer ==',
+      '== Idios Contract Offer ==',
       '',
       'Description: ' + (description || '(none)'),
       'Settlement: ' + settlementLabel,
@@ -355,9 +355,9 @@ const FinishJobPage: React.FC = () => {
     lines.push('');
     lines.push('To accept this offer:');
     lines.push('1. Open Idios in your Beam wallet');
-    lines.push('2. Click "Start a job"');
+    lines.push('2. Click "Start a contract"');
     lines.push('3. Paste these values into the form');
-    lines.push('4. Click Create Job');
+    lines.push('4. Click Create Contract');
     lines.push('');
     lines.push('Or paste this link into the URL bar of your Idios dapp:');
     lines.push(link);
@@ -398,9 +398,9 @@ const FinishJobPage: React.FC = () => {
       </Section>
 
       <Section>
-        <SectionTitle>Job Details</SectionTitle>
+        <SectionTitle>Contract Details</SectionTitle>
         <Label>Description (for your client's reference, not on chain)</Label>
-        <Input placeholder="e.g. MD simulation of HIV protease, 100ns" value={description} onChange={e => setDescription(e.target.value)} />
+        <Input placeholder="e.g. API integration, logo design, data analysis" value={description} onChange={e => setDescription(e.target.value)} />
 
         <Row>
           <div>

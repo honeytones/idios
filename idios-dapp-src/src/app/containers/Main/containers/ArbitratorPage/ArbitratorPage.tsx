@@ -318,7 +318,7 @@ const ArbitratorPage: React.FC = () => {
   };
 
   const handleRemove = (jobId: number) => {
-    if (!confirm("Stop tracking this job? Funds on chain are unaffected.")) return;
+    if (!confirm("Stop tracking this contract? Funds on chain are unaffected.")) return;
     removeTrackedArbitratorJob(jobId);
     setJobs(prev => prev.filter(j => j.jobId !== jobId));
   };
@@ -338,10 +338,10 @@ const ArbitratorPage: React.FC = () => {
       </RefreshButton>
 
       <TrackForm>
-        <TrackFormTitle>Track a Job</TrackFormTitle>
+        <TrackFormTitle>Track a Contract</TrackFormTitle>
         <TrackFormRow>
           <TrackInput
-            placeholder="Job ID, e.g. 11113"
+            placeholder="Contract ID, e.g. 11113"
             value={trackJobId}
             onChange={e => setTrackJobId(e.target.value.trim())}
           />
@@ -355,7 +355,7 @@ const ArbitratorPage: React.FC = () => {
 
       {!loading && jobs.length === 0 && (
         <EmptyState>
-          No tracked jobs yet. When a party files a dispute and notifies you off chain, paste the Job ID above to start tracking it.
+          No tracked contracts yet. When a party files a dispute and notifies you off chain, paste the Contract ID above to start tracking it.
         </EmptyState>
       )}
 

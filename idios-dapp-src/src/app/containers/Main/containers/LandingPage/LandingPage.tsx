@@ -161,7 +161,7 @@ const LandingPage: React.FC = () => {
   return (
     <Container>
       <Title>Idios</Title>
-      <Subtitle>Private settlement for AI and other compute on Beam</Subtitle>
+      <Subtitle>Private escrow on Beam</Subtitle>
       {userPk ? (
         <PubKeyPill>
           <PubKeyLabel>Your pubkey for this contract:</PubKeyLabel>
@@ -170,16 +170,16 @@ const LandingPage: React.FC = () => {
         </PubKeyPill>
       ) : null}
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.START)}>
-        <CardTitle>Start a job</CardTitle>
-        <CardDesc>Set up a private job with payment locked in escrow.</CardDesc>
+        <CardTitle>Start a contract</CardTitle>
+        <CardDesc>You know who you're working with. Enter their pubkey and lock the terms.</CardDesc>
       </Card>
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.FINISH)}>
-        <CardTitle>Generate a job offer</CardTitle>
-        <CardDesc>Send a payment request to a client. They open your link to lock funds in escrow.</CardDesc>
+        <CardTitle>Generate a contract offer</CardTitle>
+        <CardDesc>Lock funds first and send a link for the other party to accept. Good for commissioning work or paying sources.</CardDesc>
       </Card>
       <Card onClick={() => navigate(ROUTES_FULL.MAIN.MY_JOBS)}>
-        <CardTitle>My jobs</CardTitle>
-        <CardDesc>Track jobs you've created or accepted. Approve work, dispute, claim funds, or refund.</CardDesc>
+        <CardTitle>My contracts</CardTitle>
+        <CardDesc>Track contracts you've created or accepted. Approve work, dispute, claim funds, or refund.</CardDesc>
       </Card>
       <ArbitratorLink onClick={() => navigate(ROUTES_FULL.MAIN.ARBITRATOR)}>
         Arbitrator console

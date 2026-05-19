@@ -630,10 +630,10 @@ const MyJobsPage: React.FC = () => {
       </RefreshButton>
 
       <IntroBlurb>
-        Track jobs to see their on-chain state and take actions (commit, submit, approve, dispute, claim, refund).
-        Each tracked job also has an <strong>Automate this job</strong> button, which generates a config snippet
+        Track contracts to see their on-chain state and take actions (commit, submit, approve, dispute, claim, refund).
+        Each tracked contract also has an <strong>Automate this contract</strong> button, which generates a config snippet
         for the <em>Idios agent daemon</em>, a small program you can run on your computer to fire those actions
-        automatically as the job moves through its state machine. Useful for autonomous agents, marketplaces, or
+        automatically as the contract moves through its state machine. Useful for autonomous agents, marketplaces, or
         anyone who does not want to keep clicking buttons.
         {' '}
         <a href="https://github.com/honeytones/idios/blob/main/idios-agent-daemon/README.md" target="_blank" rel="noreferrer">
@@ -642,10 +642,10 @@ const MyJobsPage: React.FC = () => {
       </IntroBlurb>
 
       <TrackForm>
-        <TrackFormTitle>Track a Job</TrackFormTitle>
+        <TrackFormTitle>Track a Contract</TrackFormTitle>
         <TrackFormRow>
           <TrackInput
-            placeholder="Job ID, e.g. 33335"
+            placeholder="Contract ID, e.g. 33335"
             value={trackJobId}
             onChange={e => setTrackJobId(e.target.value)}
           />
@@ -663,14 +663,14 @@ const MyJobsPage: React.FC = () => {
 
       {!loading && jobs.length === 0 && (
         <EmptyState>
-          No tracked jobs yet. Jobs you create through "Start a job" will appear here.
+          No tracked contracts yet. Contracts you create through "Start a contract" will appear here.
         </EmptyState>
       )}
 
       {jobs.map(job => (
         <JobCard key={job.jobId}>
           <JobHeader>
-            <JobIdLabel>Job #{job.jobId}</JobIdLabel>
+            <JobIdLabel>Contract #{job.jobId}</JobIdLabel>
             <StatusBadge kind={job.state ? statusToText(job.state.status) : 'unknown'}>
               {job.loading ? 'Loading...' : job.error ? 'Error' : statusToText(job.state?.status)}
             </StatusBadge>
@@ -727,7 +727,7 @@ const MyJobsPage: React.FC = () => {
             )}
             {job.state && (job.role === 'worker' || job.role === 'requester') && (
               <DaemonConfigButton onClick={() => openExportModal(job)}>
-                Automate this job
+                Automate this contract
               </DaemonConfigButton>
             )}
             <RemoveButton onClick={() => handleRemove(job.jobId)}>
