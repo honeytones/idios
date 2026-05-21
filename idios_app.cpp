@@ -609,6 +609,71 @@ BEAM_EXPORT void Method_0()
 }
 
 // ----------------------------------------------------------------
+//  User actions: batch create Mode B contracts (POC, CLI only)
+// ----------------------------------------------------------------
+void On_user_batch_create_b(const ContractID& cid)
+{
+    static const uint32_t nMaxCount = 50;
+
+    uint32_t batch_count = 0;
+    if (!Env::DocGetNum32("batch_count", &batch_count)) return On_error("batch_count required");
+    if (batch_count == 0)                               return On_error("batch_count must be > 0");
+    if (batch_count > nMaxCount)                        return On_error("batch_count exceeds max 50");
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    for (uint32_t i = 0; i < batch_count; i++)
+    {
+        Idios::CreateModeB args;
+        Env::Memset(&args, 0, sizeof(args));
+
+        auto k_job_id               = Utils::MakeFieldIndex<50>("job_id_");
+        auto k_subnet_id            = Utils::MakeFieldIndex<50>("subnet_id_");
+        auto k_epoch                = Utils::MakeFieldIndex<50>("epoch_");
+        auto k_expiry_block         = Utils::MakeFieldIndex<50>("expiry_block_");
+        auto k_review_window_blocks = Utils::MakeFieldIndex<50>("review_window_blocks_");
+        auto k_payment              = Utils::MakeFieldIndex<50>("payment_");
+        auto k_dispute_fee          = Utils::MakeFieldIndex<50>("dispute_fee_");
+        auto k_asset_id             = Utils::MakeFieldIndex<50>("asset_id_");
+        auto k_node_pk              = Utils::MakeFieldIndex<50>("node_pk_");
+
+        k_job_id.Set(i);
+        k_subnet_id.Set(i);
+        k_epoch.Set(i);
+        k_expiry_block.Set(i);
+        k_review_window_blocks.Set(i);
+        k_payment.Set(i);
+        k_dispute_fee.Set(i);
+        k_asset_id.Set(i);
+        k_node_pk.Set(i);
+
+        if (!Env::DocGetNum64(k_job_id.m_sz,               &args.job_id))               return On_error("job_id required");
+        if (!Env::DocGetNum64(k_subnet_id.m_sz,            &args.subnet_id))            return On_error("subnet_id required");
+        if (!Env::DocGetNum64(k_epoch.m_sz,                &args.epoch))                return On_error("epoch required");
+        if (!Env::DocGetNum64(k_expiry_block.m_sz,         &args.expiry_block))         return On_error("expiry_block required");
+        if (!Env::DocGetNum64(k_review_window_blocks.m_sz, &args.review_window_blocks)) return On_error("review_window_blocks required");
+        if (!Env::DocGetNum64(k_payment.m_sz,              &args.payment))              return On_error("payment required");
+        if (!Env::DocGetNum64(k_dispute_fee.m_sz,          &args.dispute_fee))          return On_error("dispute_fee required");
+        if (!Env::DocGetNum32(k_asset_id.m_sz,             &args.asset_id))             return On_error("asset_id required");
+        if (!Env::DocGetBlob(k_node_pk.m_sz,               &args.node_pk, sizeof(PubKey))) return On_error("node_pk required");
+
+        Env::DerivePk(args.requester_pk, &kid, sizeof(kid));
+
+        FundsChange fc;
+        fc.m_Amount  = args.payment;
+        fc.m_Aid     = args.asset_id;
+        fc.m_Consume = 1;
+
+        Env::GenerateKernel(&cid, Idios::CreateModeB::s_iMethod,
+            &args, sizeof(args), &fc, 1, &sigKid, 1,
+            i == 0 ? "Idios: batch create contracts (Mode B)" : "",
+            200000);
+    }
+}
+
+// ----------------------------------------------------------------
 //  Method_1: dispatch
 // ----------------------------------------------------------------
 
@@ -632,6 +697,7 @@ BEAM_EXPORT void Method_1()
         {"refund",              On_user_refund},
         {"claim",               On_user_claim},
         {"get_key",             On_user_get_key},
+        {"batch_create_b",      On_user_batch_create_b},
     };
     static const ActionEntry ARBITRATOR_ACTIONS[] = {
         {"resolve_alice", On_arbitrator_resolve_alice},
