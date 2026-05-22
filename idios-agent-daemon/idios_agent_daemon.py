@@ -12,6 +12,18 @@ by shelling out to beam-wallet shader. Mode A worker loop only in this MVP:
 Client and arbitrator roles are not handled by this MVP. Disputed and other
 terminal states are logged and left alone.
 
+Batch creation (optional):
+    A top-level "batches" key in config lets an operator define N Mode B
+    contracts to create in a single transaction before the poll loop starts.
+    Each batch fires once. On confirmed success (shader ok + view_job confirms
+    first job_id landed) the batch is marked submitted in durable state and
+    never retried. If the tx fails for any reason the batch is NOT marked and
+    will retry on next daemon start.
+
+    NOTE: batch creation and ongoing job management are two manual steps.
+    After a batch lands, add the resulting job_ids to the "jobs" list in config
+    for the daemon to manage them through their lifecycle.
+
 Run:
     python3 idios_agent_daemon.py /path/to/config.json
 
@@ -64,6 +76,21 @@ MODE_B = 66
 DEFAULT_POLL_INTERVAL_SECONDS = 30
 SHADER_TIMEOUT_SECONDS = 600
 
+BATCH_MAX_COUNT = 50
+
+# Required fields per spec entry in a batch definition.
+BATCH_SPEC_REQUIRED_FIELDS = [
+    "job_id",
+    "subnet_id",
+    "epoch",
+    "expiry_block",
+    "review_window_blocks",
+    "payment",
+    "dispute_fee",
+    "asset_id",
+    "node_pk",
+]
+
 
 def setup_logging(logfile_path):
     logger = logging.getLogger("idios-daemon")
@@ -97,6 +124,39 @@ def load_config(path):
         if j["role"] not in ("worker", "client", "arbitrator"):
             raise ValueError("role must be worker, client, or arbitrator: " + str(j))
     cfg.setdefault("poll_interval_seconds", DEFAULT_POLL_INTERVAL_SECONDS)
+
+    # Validate batches if present.
+    if "batches" in cfg:
+        if not isinstance(cfg["batches"], list):
+            raise ValueError("config.batches must be a list")
+        for b in cfg["batches"]:
+            if "batch_id" not in b:
+                raise ValueError("each batch needs a batch_id: " + str(b))
+            if not isinstance(b.get("specs"), list) or len(b["specs"]) == 0:
+                raise ValueError("batch " + str(b.get("batch_id")) + ": specs must be a non-empty list")
+            if len(b["specs"]) > BATCH_MAX_COUNT:
+                raise ValueError(
+                    "batch " + str(b.get("batch_id")) + ": specs count " +
+                    str(len(b["specs"])) + " exceeds max " + str(BATCH_MAX_COUNT)
+                )
+            for i, spec in enumerate(b["specs"]):
+                missing_fields = [f for f in BATCH_SPEC_REQUIRED_FIELDS if f not in spec]
+                if missing_fields:
+                    raise ValueError(
+                        "batch " + str(b.get("batch_id")) + " spec[" + str(i) + "]: "
+                        "missing fields: " + ", ".join(missing_fields)
+                    )
+                if int(spec.get("payment", 0)) <= 0:
+                    raise ValueError(
+                        "batch " + str(b.get("batch_id")) + " spec[" + str(i) + "]: "
+                        "payment must be > 0"
+                    )
+                if int(spec.get("dispute_fee", 0)) <= 0:
+                    raise ValueError(
+                        "batch " + str(b.get("batch_id")) + " spec[" + str(i) + "]: "
+                        "dispute_fee must be > 0"
+                    )
+
     return cfg
 
 
@@ -271,6 +331,149 @@ def shader_resolve_bob(cfg, password, job_id, total, asset_id, logger):
     return rc == 0
 
 
+def shader_batch_create_b(cfg, password, specs, logger):
+    """
+    Fire one batch_create_b transaction creating len(specs) Mode B contracts.
+
+    Builds the indexed arg format the shader expects:
+        batch_count=N,job_id_0=...,subnet_id_0=..., ...,job_id_1=..., ...
+
+    The shader uses Utils::MakeFieldIndex<50>("field_") which produces keys like
+    job_id_0, job_id_1, etc. (trailing underscore is part of the prefix in the
+    shader source, the produced key does NOT have a double underscore: the
+    prefix "job_id_" + index "0" = "job_id_0").
+
+    Returns True if the shader call succeeded (parsed output present), False otherwise.
+    Caller is responsible for confirming on chain before marking state.
+    """
+    batch_count = len(specs)
+    parts = [("batch_count", batch_count)]
+    for i, spec in enumerate(specs):
+        parts.append(("job_id_" + str(i),               spec["job_id"]))
+        parts.append(("subnet_id_" + str(i),            spec["subnet_id"]))
+        parts.append(("epoch_" + str(i),                spec["epoch"]))
+        parts.append(("expiry_block_" + str(i),         spec["expiry_block"]))
+        parts.append(("review_window_blocks_" + str(i), spec["review_window_blocks"]))
+        parts.append(("payment_" + str(i),              spec["payment"]))
+        parts.append(("dispute_fee_" + str(i),          spec["dispute_fee"]))
+        parts.append(("asset_id_" + str(i),             spec["asset_id"]))
+        parts.append(("node_pk_" + str(i),              spec["node_pk"]))
+    args = "role=user,action=batch_create_b," + build_args(cfg, parts)
+    # Log the full args string before firing so the operator can eyeball the
+    # key format (job_id_0, payment_0, etc.) and catch any format mismatch
+    # before a real tx goes out.
+    logger.info("batch_create_b args: %s", args)
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
+def run_batches(cfg, password, state, state_path, logger):
+    """
+    Process all batches defined in config. Called once before the poll loop.
+
+    Each batch fires at most once. A batch is only marked submitted after:
+      1. shader_batch_create_b returns True (shader call produced output)
+      2. view_job on the first job_id in the batch returns a valid job
+
+    If either step fails the batch is NOT marked and will retry on next daemon
+    start. This is the correct behaviour: a failed or unconfirmed tx should
+    always be retryable.
+
+    After a batch lands the operator must manually add the resulting job_ids to
+    the "jobs" list in config for the daemon to manage them through their
+    lifecycle. Batch creation and ongoing job management are intentionally two
+    separate manual steps.
+    """
+    batches = cfg.get("batches", [])
+    if not batches:
+        return
+
+    logger.info("batch processing: %d batch(es) defined in config", len(batches))
+
+    for batch_cfg in batches:
+        batch_id = batch_cfg["batch_id"]
+        state_key = "batch_submitted_" + batch_id
+        specs = batch_cfg["specs"]
+
+        if state.get(state_key):
+            logger.info("batch %s: already submitted (durable state), skipping", batch_id)
+            continue
+
+        total_payment = sum(int(s["payment"]) for s in specs)
+        job_ids = [s["job_id"] for s in specs]
+
+        logger.info(
+            "batch %s: firing batch_create_b, count=%d, job_ids=%s, "
+            "total_payment=%d groth (wallet must have this available)",
+            batch_id, len(specs), job_ids, total_payment
+        )
+
+        ok = shader_batch_create_b(cfg, password, specs, logger)
+        if not ok:
+            logger.error(
+                "batch %s: shader call failed or produced no output. "
+                "Batch NOT marked submitted. Will retry on next daemon start.",
+                batch_id
+            )
+            continue
+
+        # Shader returned output. Now confirm the first job_id actually landed
+        # on chain before marking the batch as submitted.
+        first_job_id = specs[0]["job_id"]
+        logger.info(
+            "batch %s: shader call ok. Confirming first job_id %s landed on chain...",
+            batch_id, first_job_id
+        )
+
+        # Poll view_job until the contract lands or we give up.
+        # Blocks can take 20+ seconds. Poll every 15s for up to 75s (5 attempts)
+        # before concluding it didn't land. This avoids a false not-found on a
+        # successful batch that just hasn't confirmed yet.
+        CONFIRM_POLL_INTERVAL = 15
+        CONFIRM_POLL_ATTEMPTS = 5
+        confirmed_job = None
+        for attempt in range(1, CONFIRM_POLL_ATTEMPTS + 1):
+            logger.info(
+                "batch %s: waiting %ss before view_job attempt %d/%d for job_id %s...",
+                batch_id, CONFIRM_POLL_INTERVAL, attempt, CONFIRM_POLL_ATTEMPTS, first_job_id
+            )
+            time.sleep(CONFIRM_POLL_INTERVAL)
+            confirmed_job = shader_view_job(cfg, password, first_job_id, logger)
+            if confirmed_job:
+                logger.info(
+                    "batch %s: job_id %s confirmed on chain after attempt %d",
+                    batch_id, first_job_id, attempt
+                )
+                break
+            logger.info(
+                "batch %s: view_job attempt %d returned no data, will retry",
+                batch_id, attempt
+            )
+
+        if not confirmed_job:
+            logger.error(
+                "batch %s: view_job on job_id %s returned no data after %d attempts (~%ds). "
+                "Tx may not have landed yet. Batch NOT marked submitted. "
+                "Check chain state via dapp. If contracts exist, set '%s': true "
+                "in state file manually to prevent resubmit.",
+                batch_id, first_job_id, CONFIRM_POLL_ATTEMPTS,
+                CONFIRM_POLL_INTERVAL * CONFIRM_POLL_ATTEMPTS, state_key
+            )
+            continue
+
+        # Confirmed on chain.
+        state[state_key] = True
+        save_durable_state(state_path, state)
+        logger.info(
+            "batch %s: confirmed on chain (job_id %s status=%s). "
+            "Marked submitted. Add job_ids %s to the 'jobs' list in config "
+            "to manage them through their lifecycle.",
+            batch_id, first_job_id,
+            STATUS_NAMES.get(int(confirmed_job.get("status", -1)), "Unknown"),
+            job_ids
+        )
+
+
 def status_name(s):
     try:
         return STATUS_NAMES.get(int(s), "Unknown(" + str(s) + ")")
@@ -308,9 +511,6 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
         job_state["last_status"] = status
 
     if status == STATUS_OPEN and not job_state.get("commit_fired"):
-        # In Mode A, the worker chooses the collateral amount in the commit call.
-        # The chain only knows it after the commit lands. So we use the
-        # configured expected_collateral as the amount to commit.
         expected_collateral = job_cfg.get("expected_collateral")
         if expected_collateral is None or int(expected_collateral) <= 0:
             logger.error("job %s: expected_collateral missing or zero in config. NOT firing commit.",
@@ -366,7 +566,6 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
         return
 
     if status in (STATUS_CLOSED, STATUS_REFUNDED, STATUS_RESOLVED_TO_ALICE):
-        # Terminal from the worker's perspective. Nothing to do.
         return
 
 
@@ -405,22 +604,13 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
         logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
         job_state["last_status"] = status
 
-    # Open + past expiry_block: client can refund.
     if status == STATUS_OPEN and not job_state.get("refund_fired"):
-        current_height = int(job.get("_current_height", 0))  # not in view_job output today
-        # Without a reliable current_height from view_job, we let operators opt in
-        # via auto_refund_after_expiry: true. Daemon refunds only if config flag
-        # is set; otherwise log and wait.
         if not job_cfg.get("auto_refund_after_expiry", False):
             return
-        # If we can't tell what block we're at, we can't safely auto-refund.
-        # For now, this branch is a future enhancement that needs a current_height
-        # source. Log once per status transition and skip.
         logger.info("job %s: auto_refund_after_expiry set but daemon has no "
                     "block-height source; manual refund needed for now.", job_id)
         return
 
-    # AwaitingApproval (Mode B only): client decides approve, dispute, or wait.
     if status == STATUS_AWAITING_APPROVAL and not job_state.get("approve_fired"):
         if not job_cfg.get("auto_approve_on_hash_match", False):
             logger.info("job %s: AwaitingApproval, manual approval required. "
@@ -444,8 +634,6 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
             logger.error("job %s: approve failed", job_id)
         return
 
-    # ResolvedToAlice: dispute resolved in client's favour. Claim back
-    # payment + dispute_fee. Worker forfeits collateral.
     if status == STATUS_RESOLVED_TO_ALICE and not job_state.get("claim_fired"):
         total = payment + dispute_fee
         logger.info("job %s: dispute resolved to client, firing claim, total=%s "
@@ -458,7 +646,6 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
             logger.error("job %s: claim failed", job_id)
         return
 
-    # Refunded: refund accepted on chain, claim moves funds back to wallet.
     if status == STATUS_REFUNDED and not job_state.get("claim_fired"):
         total = payment
         logger.info("job %s: Refunded, firing claim, total=%s", job_id, total)
@@ -474,7 +661,6 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
         return
 
     if status in (STATUS_CLOSED, STATUS_RESOLVED_TO_BOB, STATUS_SETTLED):
-        # Terminal from the client's perspective. Nothing to do.
         return
 
 
@@ -516,11 +702,9 @@ def handle_arbitrator_job(cfg, password, job_cfg, state, logger):
         job_state["last_status"] = status
 
     if status != STATUS_DISPUTED:
-        # Arbitrator only acts on disputes. Everything else is logged and ignored.
         return
 
     if job_state.get("resolved"):
-        # Already fired a resolution; waiting for chain to confirm.
         return
 
     if mode != MODE_B:
@@ -584,14 +768,17 @@ def main():
     logger.info("jobs configured: %s", len(cfg["jobs"]))
     for j in cfg["jobs"]:
         logger.info("  job %s role=%s", j["job_id"], j["role"])
+    batches = cfg.get("batches", [])
+    if batches:
+        logger.info("batches configured: %s", len(batches))
+        for b in batches:
+            logger.info("  batch %s specs=%s", b["batch_id"], len(b["specs"]))
 
-    # Validate binary and wasm exist before prompting for password.
     for p in (cfg["beam_wallet_binary"], cfg["shader_app_file"], cfg["wallet_path"]):
         if not os.path.exists(p):
             logger.error("path does not exist: %s", p)
             sys.exit(2)
 
-    # Prompt once. Password is held in memory only.
     try:
         password = getpass.getpass("Wallet password: ")
     except (KeyboardInterrupt, EOFError):
@@ -599,6 +786,9 @@ def main():
         sys.exit(0)
 
     state = load_durable_state(state_path)
+
+    # Process batches once before entering the poll loop.
+    run_batches(cfg, password, state, state_path, logger)
 
     logger.info("daemon ready, starting poll loop. Ctrl-C to stop.")
     try:
