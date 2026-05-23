@@ -4,7 +4,7 @@
 
 Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on-chain dispute resolution. No public record of amounts or parties.
 
-**[Website](https://honeytones.github.io/idios-site/)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45)**
+**[Website](https://honeytones.github.io/idios-site/)** · **[AI and compute use cases](https://honeytones.github.io/idios-site/private-ai-escrow.html)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45)**
 
 > "Pay privately. Verify on chain. Dispute when needed."
 
