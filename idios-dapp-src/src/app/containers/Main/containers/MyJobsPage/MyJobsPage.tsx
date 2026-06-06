@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { styled } from '@linaria/react';
 import { ROUTES_PATH, ROUTES_FULL } from '@app/shared/constants';
 import { getTrackedJobs, removeTrackedJob, addTrackedJob, TrackedJob } from '@app/core/jobs';
-import { viewJob, refundJob, claimJob, approveJob, disputeJob } from '@app/core/api';
+import { viewJob, refundJob, claimJob, approveJob, disputeJob, commitJob, submitDelivery } from '@app/core/api';
 
 const Container = styled.div`
   display: flex;
@@ -451,6 +451,8 @@ const MyJobsPage: React.FC = () => {
   const [claimingId, setClaimingId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [disputingId, setDisputingId] = useState<number | null>(null);
+  const [committingId, setCommittingId] = useState<number | null>(null);
+  const [submittingId, setSubmittingId] = useState<number | null>(null);
   const [exportJob, setExportJob] = useState<JobWithState | null>(null);
   const [exportRole, setExportRole] = useState<'worker' | 'requester'>('worker');
   const [exportHash, setExportHash] = useState('');
@@ -561,6 +563,50 @@ const MyJobsPage: React.FC = () => {
       alert('Dispute failed. See console for details.');
     } finally {
       setDisputingId(null);
+    }
+  };
+
+  const handleCommit = async (job: JobWithState) => {
+    if (!job.state) return;
+    const input = prompt('Collateral to lock (in ' + assetLabel(job.state.asset_id) + '):', '');
+    if (input === null) return;
+    const collateral = Math.round(parseFloat(input) * 100000000);
+    if (!collateral || isNaN(collateral) || collateral <= 0) {
+      alert('Enter a valid collateral amount.');
+      return;
+    }
+    setCommittingId(job.jobId);
+    try {
+      await commitJob(job.jobId, collateral, job.state.asset_id || 0);
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Commit failed:', err);
+      alert('Commit failed. See console for details.');
+    } finally {
+      setCommittingId(null);
+    }
+  };
+
+  const handleSubmitDelivery = async (job: JobWithState) => {
+    if (!job.state) return;
+    const delivery_hash = prompt('Delivery hash (64 char hex):', '');
+    if (delivery_hash === null) return;
+    if (!/^[0-9a-fA-F]{64}$/.test(delivery_hash.trim())) {
+      alert('Delivery hash must be 64 hex characters.');
+      return;
+    }
+    setSubmittingId(job.jobId);
+    try {
+      const mode = job.state.mode === 65 ? 'A' : 'B';
+      const payment = job.state.payment || 0;
+      const collateral = job.state.collateral || 0;
+      await submitDelivery(job.jobId, delivery_hash.trim(), mode, payment, collateral, job.state.asset_id || 0);
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Submit delivery failed:', err);
+      alert('Submit delivery failed. See console for details.');
+    } finally {
+      setSubmittingId(null);
     }
   };
 
@@ -689,12 +735,28 @@ const MyJobsPage: React.FC = () => {
           )}
           {job.error && <JobDetail style={{ color: '#ff6b6b' }}>Error: {job.error}</JobDetail>}
           <ActionRow>
-            {job.state && job.state.status === 0 && (
+            {job.state && job.state.status === 0 && job.role === 'requester' && (
               <ActionButton
                 onClick={() => handleRefund(job)}
                 disabled={refundingId === job.jobId}
               >
                 {refundingId === job.jobId ? 'Refunding...' : 'Trigger Refund'}
+              </ActionButton>
+            )}
+            {job.state && job.state.status === 0 && job.role === 'worker' && (
+              <ActionButton
+                onClick={() => handleCommit(job)}
+                disabled={committingId === job.jobId}
+              >
+                {committingId === job.jobId ? 'Committing...' : 'Commit Collateral'}
+              </ActionButton>
+            )}
+            {job.state && job.state.status === 1 && job.role === 'worker' && (
+              <ActionButton
+                onClick={() => handleSubmitDelivery(job)}
+                disabled={submittingId === job.jobId}
+              >
+                {submittingId === job.jobId ? 'Submitting...' : 'Submit Delivery'}
               </ActionButton>
             )}
             {job.state && (
