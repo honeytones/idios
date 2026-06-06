@@ -62,7 +62,7 @@ Idios v3 uses a two phase claim pattern. Authorisation methods (approve, resolve
 
 - v3 contract deployed at block 3842196 (May 2, 2026)
 - Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds
-- Dapp v3.1.6 published, supports both modes via UI
+- Dapp v3.1.7 published, supports both modes via UI
 
 **Verified resolution paths (real funds, mainnet):**
 
