@@ -603,10 +603,14 @@ def main():
         print("Config error: " + str(e), file=sys.stderr)
         sys.exit(1)
 
-    try:
-        _password = getpass.getpass("Wallet password: ")
-    except (KeyboardInterrupt, EOFError):
-        sys.exit(0)
+    env_pass = os.environ.get("IDIOS_WALLET_PASS")
+    if env_pass:
+        _password = env_pass
+    else:
+        try:
+            _password = getpass.getpass("Wallet password: ")
+        except (KeyboardInterrupt, EOFError):
+            sys.exit(0)
 
     # Run the MCP server via stdio transport.
     mcp.run(transport="stdio")
