@@ -483,11 +483,14 @@ def claim_funds(job_id: int) -> str:
     collateral = int(job_data.get("collateral", 0))
     dispute_fee = int(job_data.get("dispute_fee", 0))
     asset_id = int(job_data.get("asset_id", 0))
+    mode = int(job_data.get("mode", 66))
 
     STATUS_SETTLED = 4
     STATUS_RESOLVED_TO_ALICE = 6
     STATUS_RESOLVED_TO_BOB = 7
 
+    if status == STATUS_SETTLED and mode == 65:
+        return "Contract {} is Mode A (hash-verified) and settled automatically at delivery. Funds were released when the matching hash was submitted, so there is nothing to claim.".format(job_id)
     if status == STATUS_SETTLED:
         total = payment + collateral
     elif status == STATUS_RESOLVED_TO_BOB:

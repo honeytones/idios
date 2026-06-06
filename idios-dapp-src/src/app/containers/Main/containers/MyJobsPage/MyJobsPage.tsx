@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { styled } from '@linaria/react';
 import { ROUTES_PATH, ROUTES_FULL } from '@app/shared/constants';
 import { getTrackedJobs, removeTrackedJob, addTrackedJob, TrackedJob } from '@app/core/jobs';
-import { viewJob, refundJob, claimJob, approveJob, disputeJob, commitJob, submitDelivery } from '@app/core/api';
+import { viewJob, refundJob, claimJob, approveJob, disputeJob, commitJob, submitDelivery, claimAfterTimeout } from '@app/core/api';
 
 const Container = styled.div`
   display: flex;
@@ -453,6 +453,7 @@ const MyJobsPage: React.FC = () => {
   const [disputingId, setDisputingId] = useState<number | null>(null);
   const [committingId, setCommittingId] = useState<number | null>(null);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
+  const [claimingTimeoutId, setClaimingTimeoutId] = useState<number | null>(null);
   const [exportJob, setExportJob] = useState<JobWithState | null>(null);
   const [exportRole, setExportRole] = useState<'worker' | 'requester'>('worker');
   const [exportHash, setExportHash] = useState('');
@@ -607,6 +608,20 @@ const MyJobsPage: React.FC = () => {
       alert('Submit delivery failed. See console for details.');
     } finally {
       setSubmittingId(null);
+    }
+  };
+
+  const handleClaimAfterTimeout = async (job: JobWithState) => {
+    if (!job.state) return;
+    setClaimingTimeoutId(job.jobId);
+    try {
+      await claimAfterTimeout(job.jobId);
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Claim after timeout failed:', err);
+      alert('Claim after timeout failed. The review window may not have passed yet. See console for details.');
+    } finally {
+      setClaimingTimeoutId(null);
     }
   };
 
@@ -786,6 +801,14 @@ const MyJobsPage: React.FC = () => {
                   {disputingId === job.jobId ? 'Disputing...' : 'Dispute Delivery'}
                 </ActionButton>
               </>
+            )}
+            {job.state && job.state.status === 2 && job.role === 'worker' && (
+              <ActionButton
+                onClick={() => handleClaimAfterTimeout(job)}
+                disabled={claimingTimeoutId === job.jobId}
+              >
+                {claimingTimeoutId === job.jobId ? 'Claiming...' : 'Claim After Timeout'}
+              </ActionButton>
             )}
             {job.state && (job.role === 'worker' || job.role === 'requester') && (
               <DaemonConfigButton onClick={() => openExportModal(job)}>
