@@ -49,37 +49,61 @@ If Beam Desktop is not running, use a public mainnet node like eu-node01.mainnet
 
     python3 idios_mcp_server.py --config idios_mcp_config.json
 
-The server prompts for your wallet password once at startup, then serves via
-stdio transport. Password is held in memory only, never written to disk.
+The server needs your wallet password. Run by hand, it prompts once at
+startup. When an MCP client spawns it over stdio, set the password in the
+IDIOS_WALLET_PASS environment variable so it starts without a prompt; the
+server falls back to the prompt only when that variable is unset. The
+password is held in memory and never written to disk by the server.
+
+Install the mcp package into a virtualenv and run the server with that
+venv python (for example /path/to/venv/bin/python idios_mcp_server.py ...)
+so the client spawns it with the mcp package available.
 
 ## Connecting to your agent framework
 
-Add the server to your agent's MCP config. Example for Claude Desktop:
+The server uses stdio transport, which every major MCP client supports
+(Claude Code, Claude Desktop, LangGraph, CrewAI, AutoGen, and others).
+
+### Claude Code (the path on Linux, where there is no Claude Desktop)
+
+Export the password in the shell, then register the server. Keeping the
+password out of the command and config means it is never written to disk:
+
+    read -s -p "Wallet password: " IDIOS_WALLET_PASS && export IDIOS_WALLET_PASS && echo
+    claude mcp add --scope user idios -- /path/to/venv/bin/python /path/to/idios_mcp_server.py --config /path/to/idios_mcp_config.json
+
+The server inherits IDIOS_WALLET_PASS from the shell Claude Code runs in, so
+launch claude from that same shell. Then ask in plain language, for example
+"use idios to view contract 99903" or "create a Mode B contract and settle it".
+
+### Config-file clients (Claude Desktop and others)
 
     {
       "mcpServers": {
         "idios": {
-          "command": "python3",
-          "args": ["/path/to/idios_mcp_server.py", "--config", "/path/to/idios_mcp_config.json"]
+          "command": "/path/to/venv/bin/python",
+          "args": ["/path/to/idios_mcp_server.py", "--config", "/path/to/idios_mcp_config.json"],
+          "env": { "IDIOS_WALLET_PASS": "your-wallet-password" }
         }
       }
     }
 
-For LangGraph, CrewAI, AutoGen: use their respective MCP client configuration.
-The server uses stdio transport which all major frameworks support.
+Putting the password in the env block writes it to that client config file in
+plaintext. Fine on a machine you control, but know the tradeoff.
 
 ## Available tools
 
 | Tool | Role | What it does |
 |---|---|---|
 | view_contract | any | Read current contract state from chain |
+| get_chain_info | any | Read current block height, to pick a future expiry_block |
 | create_contract_b | requester | Create Mode B (reviewed) contract, locks payment |
 | create_contract_a | requester | Create Mode A (hash-verified) contract, locks payment + result hash |
 | commit_collateral | worker | Lock collateral to activate contract |
 | submit_delivery | worker | Submit delivery hash, auto-settles Mode A on match |
 | approve_delivery | requester | Approve Mode B delivery, worker can then claim |
 | dispute_delivery | requester | Dispute Mode B delivery, routes to arbitrator |
-| claim_funds | either | Claim from Settled, Resolved, or Refunded contract |
+| claim_funds | either | Claim from a Settled or Resolved (dispute) contract |
 | claim_after_timeout | worker | Claim after requester goes silent past review window |
 | refund_contract | requester | Refund expired Open contract (worker never committed) |
 
