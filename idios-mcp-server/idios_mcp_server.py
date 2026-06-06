@@ -152,6 +152,20 @@ def _status_name(status_int) -> str:
         return "Unknown({})".format(status_int)
 
 
+def _view_state(job_id: int):
+    """Return parsed contract state dict, or None if the view failed.
+    view_contract returns a plain error string (not JSON) on failure, so
+    parse defensively rather than letting json.loads raise."""
+    raw = view_contract(job_id)
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
 # Initialise FastMCP server.
 mcp = FastMCP(
     "idios",
@@ -323,9 +337,9 @@ def commit_collateral(job_id: int, collateral: int) -> str:
 
     Returns confirmation once collateral is on chain, or error message.
     """
-    job_data = json.loads(view_contract(job_id))
-    if "error" in str(job_data).lower():
-        return "Cannot commit: could not view contract {}".format(job_id)
+    job_data = _view_state(job_id)
+    if job_data is None:
+        return "Cannot commit: could not read contract {} state.".format(job_id)
     asset_id = job_data.get("asset_id", 0)
     args = "role=user,action=commit," + _build_args([
         ("job_id", job_id),
@@ -363,9 +377,9 @@ def submit_delivery(job_id: int, delivery_hash: str) -> str:
 
     Returns confirmation of submission, or error message.
     """
-    job_data = json.loads(view_contract(job_id))
-    if "error" in str(job_data).lower():
-        return "Cannot submit delivery: could not view contract {}".format(job_id)
+    job_data = _view_state(job_id)
+    if job_data is None:
+        return "Cannot submit delivery: could not read contract {} state.".format(job_id)
     payment = job_data.get("payment", 0)
     collateral = job_data.get("collateral", 0)
     mode = job_data.get("mode", 66)
@@ -450,8 +464,8 @@ def claim_funds(job_id: int) -> str:
     Call this after the contract reaches one of these states:
     - Settled (status=4): worker claims payment + collateral
     - ResolvedToBob (status=7): worker won dispute, claims payment + collateral + dispute_fee
-    - ResolvedToAlice (status=6): requester won dispute, claims payment + dispute_fee
-    - Refunded (status=5): requester claims payment back
+    - ResolvedToAlice (status=6): requester won dispute, claims payment + collateral + dispute_fee
+    A refunded contract (status=5) returns funds directly and needs no claim.
 
     The amounts are read from chain automatically.
 
@@ -460,9 +474,9 @@ def claim_funds(job_id: int) -> str:
 
     Returns confirmation of claim, or error message.
     """
-    job_data = json.loads(view_contract(job_id))
-    if "error" in str(job_data).lower():
-        return "Cannot claim: could not view contract {}".format(job_id)
+    job_data = _view_state(job_id)
+    if job_data is None:
+        return "Cannot claim: could not read contract {} state.".format(job_id)
 
     status = int(job_data.get("status", -1))
     payment = int(job_data.get("payment", 0))
@@ -471,7 +485,6 @@ def claim_funds(job_id: int) -> str:
     asset_id = int(job_data.get("asset_id", 0))
 
     STATUS_SETTLED = 4
-    STATUS_REFUNDED = 5
     STATUS_RESOLVED_TO_ALICE = 6
     STATUS_RESOLVED_TO_BOB = 7
 
@@ -480,11 +493,9 @@ def claim_funds(job_id: int) -> str:
     elif status == STATUS_RESOLVED_TO_BOB:
         total = payment + collateral + dispute_fee
     elif status == STATUS_RESOLVED_TO_ALICE:
-        total = payment + dispute_fee
-    elif status == STATUS_REFUNDED:
-        total = payment
+        total = payment + collateral + dispute_fee
     else:
-        return "Contract {} is not in a claimable state. Current status: {} ({}). Claimable states: Settled, ResolvedToAlice, ResolvedToBob, Refunded.".format(
+        return "Contract {} is not in a claimable state. Current status: {} ({}). Claimable states: Settled, ResolvedToAlice, ResolvedToBob. A refunded contract returns funds directly, no claim needed.".format(
             job_id, status, _status_name(status)
         )
 
@@ -545,9 +556,9 @@ def refund_contract(job_id: int) -> str:
 
     Returns confirmation of refund, or error message.
     """
-    job_data = json.loads(view_contract(job_id))
-    if "error" in str(job_data).lower():
-        return "Cannot refund: could not view contract {}".format(job_id)
+    job_data = _view_state(job_id)
+    if job_data is None:
+        return "Cannot refund: could not read contract {} state.".format(job_id)
     payment = int(job_data.get("payment", 0))
     collateral = int(job_data.get("collateral", 0))
     asset_id = int(job_data.get("asset_id", 0))
