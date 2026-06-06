@@ -206,6 +206,44 @@ def view_contract(job_id: int) -> str:
 
 
 @mcp.tool()
+def get_chain_info() -> str:
+    """
+    Read the current Beam block height from the wallet's node.
+
+    Call this before creating a contract so you can choose a future
+    expiry_block (the contract requires expiry_block to be in the future).
+    Add a margin to the returned height: current + 50000 is roughly 7 days,
+    current + 2000 is a short test window.
+
+    Returns the current block height, or an error message.
+    """
+    import os, subprocess
+    cmd = [
+        _cfg["beam_wallet_binary"], "info",
+        "--node_addr=" + _cfg["node_addr"],
+        "--wallet_path=" + _cfg["wallet_path"],
+        "--pass=" + _password,
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=os.path.dirname(_cfg["beam_wallet_binary"]),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except Exception as e:
+        return "Error reading chain info: " + str(e)
+    out = result.stdout + result.stderr
+    for line in out.splitlines():
+        if "Current height" in line:
+            digits = "".join(ch for ch in line if ch.isdigit())
+            if digits:
+                return "Current block height: {}. For expiry_block add a margin (current + 50000 is about 7 days, current + 2000 is a short test).".format(int(digits))
+    return "Could not read the current height from wallet info."
+
+
+@mcp.tool()
 def create_contract_b(
     job_id: int,
     worker_pubkey: str,
