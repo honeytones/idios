@@ -16,7 +16,7 @@ Public payment rails leak. Every contract, every payment, every counterparty bec
 
 Idios solves the payment and settlement privacy problem. Payment is locked in private escrow on [Beam](https://beam.mw). The worker locks collateral. Settlement happens on chain with full privacy of amounts and parties. Beam's MimbleWimble protocol hides amounts and identities at the base layer. Idios is what you get when you build escrow on that foundation.
 
-The primitive Idios implements is the same one ERC-8183 standardises on Ethereum for AI agent commerce: a Job with a Client, a Provider, and an Evaluator, with payment held in escrow until verifiable delivery. ERC-8183 implementations on Ethereum, Base, and BNB Chain are public by default. Idios is the private equivalent on Beam.
+ERC-8183 standardises the same starting primitive on Ethereum, a Job with escrowed payment for AI agent work. Idios is a separate and more complete protocol on Beam, not a port of it. It adds worker collateral and working dispute resolution, neither of which ERC-8183 has today, and it settles privately with amounts and parties hidden. Idios uses its own roles: Requester, Worker, and Arbitrator.
 
 ---
 
