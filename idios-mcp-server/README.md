@@ -1,5 +1,7 @@
 # Idios MCP Server
 
+> New here? Start with [QUICKSTART.md](QUICKSTART.md): from nothing to a settled contract, for an agent developer.
+
 Exposes Idios private escrow contract actions as MCP tools so any MCP-compatible
 AI agent framework (LangGraph, CrewAI, AutoGen, Claude, or any framework with MCP
 support) can create and manage private work contracts on Beam without human involvement.
