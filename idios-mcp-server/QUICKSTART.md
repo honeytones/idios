@@ -6,7 +6,7 @@ It assumes you are a developer running an agent on a server or a dev box (Linux 
 
 ## Heads up: there are two coins called Beam
 
-You want the privacy coin built on MimbleWimble called Beam privacy, from **beam.mw**. There is a completely different project. Everything below is the MimbleWimble Beam.
+You want the privacy coin built on MimbleWimble called Beam privacy, from **beam.mw**. There is a completely different project called Beam its a gaming token and has nothing to do with Beam Privacy. Everything below is the MimbleWimble Beam.
 
 ## What you need
 
