@@ -12,8 +12,7 @@ You want the privacy coin built on MimbleWimble, from **beam.mw**. There is a co
 
 - Python 3.10 or newer
 - The Beam CLI wallet binary (comes with the Beam wallet download from beam.mw)
-- A little BEAM for transaction fees (a whole contract costs well under a cent in fees)
-- Some NPH for payment and collateral (NPH is a USD pegged confidential stablecoin on Beam, asset id 47)
+- Some BEAM, for transaction fees and, in a test, as the payment and collateral asset itself (a whole test contract costs only cents)
 - An MCP capable agent client (Claude Code on Linux, or any framework with MCP support: LangGraph, CrewAI, AutoGen)
 
 ## 1. Get and create a wallet
@@ -26,15 +25,13 @@ Set a password and save the seed phrase. This gives you the binary plus a wallet
 
 ## 2. Fund the wallet
 
-There is no direct fiat on ramp. The path is:
+For testing, all you need is a little BEAM. The easiest way is buybeam.my, a community run swap that takes ETH straight to BEAM and sends it to your Beam wallet address in seconds, no exchange account needed. You can also buy BEAM on a centralised exchange like KuCoin or CoinEx using USDT, BTC or ETH and withdraw it.
 
-1. Buy BEAM on a centralised exchange (it is listed on many, for example KuCoin or CoinEx) using USDT, BTC or ETH.
-2. Withdraw the BEAM to your wallet address.
-3. Swap some BEAM to NPH on the DEX inside the Beam Desktop wallet.
+A whole test contract costs only cents, and in a self dealing test, where you play both sides, the funds cycle back to you. Use BEAM (asset id 0) as the payment and collateral asset and you are ready.
 
-You only need a small amount to start. A test contract of 0.01 NPH payment and 0.005 NPH collateral costs cents, and in a self dealing test (where you play both sides) the NPH cycles back to you.
+NPH (asset id 47) is optional. It is a USD pegged confidential stablecoin on Beam, worth using when you want to hold value steadily over time rather than sit in volatile BEAM, so more for real payments than quick tests. You get it by swapping BEAM to NPH on the DEX inside the Beam Desktop wallet.
 
-A faucet for small test amounts is planned, which will skip this step for trying it out.
+A faucet for small test amounts is planned, which will make this step even easier.
 
 ## 3. Point at a node
 
@@ -84,7 +81,7 @@ Your agent now has the Idios tools: get_chain_info, view_contract, create_contra
 
 Prove it end to end with a self dealing test, where you are both sides. Ask the agent something like:
 
-    Run a full test contract: create a Mode B contract with the worker pubkey set to my own wallet, a small payment in NPH, a short expiry. Then commit collateral, submit a delivery, approve it, and claim the funds. Tell me the final state.
+    Run a full test contract: create a Mode B contract with the worker pubkey set to my own wallet, a small payment in BEAM, a short expiry. Then commit collateral, submit a delivery, approve it, and claim the funds. Tell me the final state.
 
 It should walk the contract from Open to Closed and return your test funds. That confirms the whole stack: wallet, node, MCP server, and the agent driving it.
 
