@@ -202,6 +202,8 @@ def view_contract(job_id: int) -> str:
     job = parsed.get("job") or parsed
     status_int = job.get("status", -1)
     job["status_name"] = _status_name(status_int)
+    asset_id = int(job.get("asset_id", 0))
+    job["asset_name"] = {0: "BEAM", 47: "NPH"}.get(asset_id, "asset {}".format(asset_id))
     return json.dumps(job, indent=2)
 
 
