@@ -246,6 +246,35 @@ def get_chain_info() -> str:
 
 
 @mcp.tool()
+def get_key() -> str:
+    """
+    Get your own Beam pubkey for the Idios contract.
+
+    This is the value a counterparty uses to name you in a contract: it goes
+    in worker_pubkey when a requester calls create_contract_a or
+    create_contract_b. It is derived from your wallet and the Idios contract,
+    so it stays the same for this wallet on this contract.
+
+    Share it with a counterparty so they can create a contract with you.
+    This call is read-only and does not require wallet funds.
+
+    Returns your pubkey as a hex string, or an error message.
+    """
+    args = "role=user,action=get_key," + _build_args([])
+    ok, parsed, err = _call_shader(args)
+    if not ok or parsed is None:
+        return "Error getting your pubkey: {}".format(err)
+    pk = None
+    if isinstance(parsed.get("key"), dict):
+        pk = parsed["key"].get("pub_key")
+    if not pk:
+        pk = parsed.get("pub_key") or parsed.get("pubkey")
+    if not pk:
+        return "Got a response but no pub_key field. Raw output: {}".format(json.dumps(parsed))
+    return "Your Idios pubkey (share this with counterparties): {}".format(pk)
+
+
+@mcp.tool()
 def create_contract_b(
     job_id: int,
     worker_pubkey: str,
