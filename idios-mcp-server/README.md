@@ -99,6 +99,7 @@ plaintext. Fine on a machine you control, but know the tradeoff.
 |---|---|---|
 | view_contract | any | Read current contract state from chain |
 | get_chain_info | any | Read current block height, to pick a future expiry_block |
+| get_key | any | Get your own pubkey, the value a counterparty uses as worker_pubkey |
 | create_contract_b | requester | Create Mode B (reviewed) contract, locks payment |
 | create_contract_a | requester | Create Mode A (hash-verified) contract, locks payment + result hash |
 | commit_collateral | worker | Lock collateral to activate contract |
