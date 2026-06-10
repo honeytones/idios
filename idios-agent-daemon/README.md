@@ -85,7 +85,7 @@ Copy config.example.json to config.json and edit the paths. Key fields:
     shader_app_file      absolute path to idios_app.wasm
     wallet_path          absolute path to your wallet.db
     node_addr            127.0.0.1:10005 for Beam Desktop embedded node
-    cid                  f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45
+    cid                  ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb
 
 node_addr of 127.0.0.1:10005 points at the embedded node inside Beam Desktop. If Beam Desktop is not running you can point at a remote mainnet node like eu-node01.mainnet.beam.mw:8100.
 

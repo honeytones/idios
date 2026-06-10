@@ -56,6 +56,7 @@ STATUS_REFUNDED = 5
 STATUS_RESOLVED_TO_ALICE = 6
 STATUS_RESOLVED_TO_BOB = 7
 STATUS_CLOSED = 8
+STATUS_VOIDED = 9
 
 STATUS_NAMES = {
     0: "Open",
@@ -67,6 +68,7 @@ STATUS_NAMES = {
     6: "ResolvedToAlice",
     7: "ResolvedToBob",
     8: "Closed",
+    9: "Voided",
 }
 
 # Mode values are ASCII codes for 'A' and 'B', mirroring api.tsx.
@@ -326,6 +328,44 @@ def shader_resolve_bob(cfg, password, job_id, total, asset_id, logger):
         ("job_id", job_id),
         ("total", total),
         ("asset_id", asset_id),
+    ])
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
+def shader_void_dispute(cfg, password, job_id, logger):
+    """Flip a Disputed job the arbitrator never resolved into Voided.
+    Permissionless trigger; gated on-chain by the arbitrator timeout."""
+    args = "role=user,action=void_dispute," + build_args(cfg, [
+        ("job_id", job_id),
+    ])
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
+def shader_void_claim_requester(cfg, password, job_id, logger):
+    """Requester reclaims their payment from a voided dispute."""
+    args = "role=user,action=void_claim_requester," + build_args(cfg, [
+        ("job_id", job_id),
+    ])
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
+def shader_void_claim_node(cfg, password, job_id, logger):
+    """Node reclaims their collateral from a voided dispute."""
+    args = "role=user,action=void_claim_node," + build_args(cfg, [
+        ("job_id", job_id),
+    ])
+    rc, _, _, _ = call_shader(cfg, password, args, logger)
+    return rc == 0
+
+
+def shader_treasury_sweep(cfg, password, job_id, logger):
+    """Treasury collects forfeited funds: collateral on a Refunded job,
+    or the unawardable dispute_fee on a Voided job."""
+    args = "role=treasury,action=sweep," + build_args(cfg, [
+        ("job_id", job_id),
     ])
     rc, _, _, _ = call_shader(cfg, password, args, logger)
     return rc == 0

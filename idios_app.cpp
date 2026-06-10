@@ -47,6 +47,11 @@ struct ArbitratorKeyID {
     uint8_t m_Ctx = 1;
 };
 
+struct TreasuryKeyID {
+    uint8_t m_Tag = 'T';
+    uint8_t m_Ctx = 1;
+};
+
 // ----------------------------------------------------------------
 //  Manager actions (deploy, view)
 // ----------------------------------------------------------------
@@ -58,6 +63,9 @@ void On_manager_deploy(const ContractID& unused)
 
     ArbitratorKeyID kid;
     Env::DerivePk(params.arbitrator_pk, &kid, sizeof(kid));
+
+    TreasuryKeyID tkid;
+    Env::DerivePk(params.treasury_pk, &tkid, sizeof(tkid));
 
     uint64_t review_window = 10080;
     uint64_t arbitrator_timeout = 20160;
@@ -81,6 +89,7 @@ void On_manager_view(const ContractID& cid)
 
     Env::DocGroup gr("params");
     Env::DocAddBlob_T("arbitrator_pk", params.arbitrator_pk);
+    Env::DocAddBlob_T("treasury_pk", params.treasury_pk);
     Env::DocAddNum64("default_review_window", params.default_review_window);
     Env::DocAddNum64("arbitrator_timeout_blocks", params.arbitrator_timeout_blocks);
 }
@@ -387,7 +396,9 @@ void On_user_refund(const ContractID& cid)
     Env::KeyID sigKid(&kid, sizeof(kid));
 
     FundsChange fc;
-    fc.m_Amount  = job.payment + job.collateral;
+    // Must match the contract: refund returns payment only. Forfeited
+    // collateral (Active path) stays locked in the contract by design.
+    fc.m_Amount  = job.payment;
     fc.m_Aid     = job.asset_id;
     fc.m_Consume = 0;
 
@@ -456,6 +467,138 @@ void On_arbitrator_get_key(const ContractID& cid)
     Env::DerivePk(pk, &kid, sizeof(kid));
     Env::DocGroup gr("key");
     Env::DocAddBlob("pub_key", &pk, sizeof(PubKey));
+}
+
+void On_treasury_get_key(const ContractID& cid)
+{
+    TreasuryKeyID kid;
+    PubKey pk;
+    Env::DerivePk(pk, &kid, sizeof(kid));
+    Env::DocGroup gr("key");
+    Env::DocAddBlob("pub_key", &pk, sizeof(PubKey));
+}
+
+// ----------------------------------------------------------------
+//  Arbitrator-timeout: void a stale dispute, then per-party claims
+// ----------------------------------------------------------------
+
+// Permissionless trigger. The contract method does no AddSig, so we pass no
+// signer here; the wallet still funds the kernel fee. If the toolchain
+// rejects an unsigned shader kernel, re-enable the requester's UserKeyID as
+// the signer and gate Method_16 on job.requester_pk.
+void On_user_void_dispute(const ContractID& cid)
+{
+    Idios::VoidStaleDispute args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    Env::GenerateKernel(&cid, Idios::VoidStaleDispute::s_iMethod,
+        &args, sizeof(args), nullptr, 0, nullptr, 0,
+        "Idios: void stale dispute (arbitrator timeout)",
+        200000);
+}
+
+void On_user_void_claim_requester(const ContractID& cid)
+{
+    Idios::VoidClaimRequester args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    struct KeyJob { uint8_t prefix; uint64_t job_id; } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
+    key.job_id = args.job_id;
+    Env::Key_T<KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = job.payment;
+    fc.m_Aid     = job.asset_id;
+    fc.m_Consume = 0;
+
+    Env::GenerateKernel(&cid, Idios::VoidClaimRequester::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: reclaim payment (voided dispute)",
+        200000);
+}
+
+void On_user_void_claim_node(const ContractID& cid)
+{
+    Idios::VoidClaimNode args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    struct KeyJob { uint8_t prefix; uint64_t job_id; } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
+    key.job_id = args.job_id;
+    Env::Key_T<KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = job.collateral;
+    fc.m_Aid     = job.asset_id;
+    fc.m_Consume = 0;
+
+    Env::GenerateKernel(&cid, Idios::VoidClaimNode::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: reclaim collateral (voided dispute)",
+        200000);
+}
+
+// ----------------------------------------------------------------
+//  Treasury: sweep forfeited funds (collateral on Refunded, fee on Voided)
+// ----------------------------------------------------------------
+
+void On_treasury_sweep(const ContractID& cid)
+{
+    Idios::TreasurySweep args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    struct KeyJob { uint8_t prefix; uint64_t job_id; } key;
+    Env::Memset(&key, 0, sizeof(key));
+    key.prefix = Idios::Tags::s_Job;
+    key.job_id = args.job_id;
+    Env::Key_T<KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
+
+    uint64_t amount = 0;
+    if ((uint32_t)job.status == Idios::JobStatus::Refunded)
+        amount = job.collateral;
+    else if ((uint32_t)job.status == Idios::JobStatus::Voided)
+        amount = job.dispute_fee;
+    if (amount == 0) return On_error("nothing to sweep for this job");
+
+    TreasuryKeyID kid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = amount;
+    fc.m_Aid     = job.asset_id;
+    fc.m_Consume = 0;
+
+    Env::GenerateKernel(&cid, Idios::TreasurySweep::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: treasury sweep forfeited funds",
+        200000);
 }
 
 // ----------------------------------------------------------------
@@ -589,6 +732,18 @@ BEAM_EXPORT void Method_0()
                 Env::DocAddText("total",    "Amount");
                 Env::DocAddText("asset_id", "AssetID");
             }
+            {
+                Env::DocGroup grMethod("void_dispute");
+                Env::DocAddText("job_id", "uint64");
+            }
+            {
+                Env::DocGroup grMethod("void_claim_requester");
+                Env::DocAddText("job_id", "uint64");
+            }
+            {
+                Env::DocGroup grMethod("void_claim_node");
+                Env::DocAddText("job_id", "uint64");
+            }
         }
         {
             Env::DocGroup grRole("arbitrator");
@@ -603,6 +758,13 @@ BEAM_EXPORT void Method_0()
                 Env::DocAddText("job_id",   "uint64");
                 Env::DocAddText("total",    "Amount");
                 Env::DocAddText("asset_id", "AssetID");
+            }
+        }
+        {
+            Env::DocGroup grRole("treasury");
+            {
+                Env::DocGroup grMethod("sweep");
+                Env::DocAddText("job_id", "uint64");
             }
         }
     }
@@ -696,6 +858,9 @@ BEAM_EXPORT void Method_1()
         {"claim_after_timeout", On_user_claim_after_timeout},
         {"refund",              On_user_refund},
         {"claim",               On_user_claim},
+        {"void_dispute",          On_user_void_dispute},
+        {"void_claim_requester",  On_user_void_claim_requester},
+        {"void_claim_node",       On_user_void_claim_node},
         {"get_key",             On_user_get_key},
         {"batch_create_b",      On_user_batch_create_b},
     };
@@ -704,10 +869,15 @@ BEAM_EXPORT void Method_1()
         {"resolve_bob",   On_arbitrator_resolve_bob},
         {"get_key",       On_arbitrator_get_key},
     };
+    static const ActionEntry TREASURY_ACTIONS[] = {
+        {"sweep",   On_treasury_sweep},
+        {"get_key", On_treasury_get_key},
+    };
     static const RoleEntry VALID_ROLES[] = {
         {"manager",    MANAGER_ACTIONS,    sizeof(MANAGER_ACTIONS) / sizeof(MANAGER_ACTIONS[0])},
         {"user",       USER_ACTIONS,       sizeof(USER_ACTIONS) / sizeof(USER_ACTIONS[0])},
         {"arbitrator", ARBITRATOR_ACTIONS, sizeof(ARBITRATOR_ACTIONS) / sizeof(ARBITRATOR_ACTIONS[0])},
+        {"treasury",   TREASURY_ACTIONS,   sizeof(TREASURY_ACTIONS) / sizeof(TREASURY_ACTIONS[0])},
     };
     static const uint32_t ROLE_COUNT = sizeof(VALID_ROLES) / sizeof(VALID_ROLES[0]);
 

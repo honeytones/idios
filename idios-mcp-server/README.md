@@ -41,7 +41,7 @@ Copy idios_mcp_config.example.json to idios_mcp_config.json and fill in your pat
       "shader_app_file": "/path/to/idios_app.wasm",
       "wallet_path": "/home/you/beam-cli/wallet.db",
       "node_addr": "127.0.0.1:10005",
-      "cid": "f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45"
+      "cid": "ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb"
     }
 
 node_addr of 127.0.0.1:10005 is the embedded node inside Beam Desktop wallet.
@@ -128,5 +128,5 @@ your role, and a description of the situation.
 
 ## Live contract
 
-CID: f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45
+CID: ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb
 Deployed on Beam mainnet since May 2, 2026.

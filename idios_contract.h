@@ -2,7 +2,7 @@
 
 namespace Idios {
 
-    static const ShaderID s_SID = {0xfb,0x21,0xd4,0x6b,0x65,0xf3,0x8b,0xb5,0xac,0xe8,0xde,0x34,0x28,0xfb,0x99,0x7f,0x6e,0xf4,0x60,0xd3,0x01,0xf2,0xfa,0xc0,0x5d,0x6d,0x14,0xcd,0x35,0xea,0xa5,0x3f};
+    static const ShaderID s_SID = {0xda,0x9c,0xac,0x81,0xd0,0xa7,0x86,0x01,0x45,0x9a,0xa3,0xef,0xc7,0xcc,0x5b,0xb2,0xbb,0xc8,0xac,0x4e,0x99,0xf5,0x73,0x08,0x31,0x54,0x5e,0xf8,0x65,0xb8,0xd1,0x71};
 
 #pragma pack (push, 1)
 
@@ -21,6 +21,7 @@ enum JobStatus : uint8_t {
     ResolvedToAlice   = 6,
     ResolvedToBob     = 7,
     Closed            = 8,
+    Voided            = 9,   // dispute abandoned by arbitrator (timed out)
 };
 
 enum JobMode : uint8_t {
@@ -50,6 +51,7 @@ struct Job {
 
 struct Params {
     PubKey arbitrator_pk;
+    PubKey treasury_pk;
     Height default_review_window;
     Height arbitrator_timeout_blocks;
 };
@@ -125,6 +127,26 @@ struct ClaimAfterTimeout {
 };
 struct Claim {
     static const uint32_t s_iMethod = 15;
+    uint64_t  job_id;
+};
+
+struct VoidStaleDispute {
+    static const uint32_t s_iMethod = 16;
+    uint64_t  job_id;
+};
+
+struct VoidClaimRequester {
+    static const uint32_t s_iMethod = 17;
+    uint64_t  job_id;
+};
+
+struct VoidClaimNode {
+    static const uint32_t s_iMethod = 18;
+    uint64_t  job_id;
+};
+
+struct TreasurySweep {
+    static const uint32_t s_iMethod = 19;
     uint64_t  job_id;
 };
 

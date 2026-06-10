@@ -3,7 +3,7 @@
   "shader_app_file": "/home/tones/idios-repo/idios_app.wasm",
   "wallet_path": "/home/tones/beam-cli-new1/wallet.db",
   "node_addr": "127.0.0.1:10005",
-  "cid": "f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45",
+  "cid": "ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb",
   "poll_interval_seconds": 30,
   "log_file": "/home/tones/idios-repo/idios-agent-daemon/idios-daemon.log",
   "state_file": "/home/tones/idios-repo/idios-agent-daemon/jobs-state.json",

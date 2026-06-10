@@ -45,6 +45,7 @@ static bool JobIdInUse(uint64_t job_id) {
 
 BEAM_EXPORT void Ctor(const Idios::Params& params) {
     Env::Halt_if(Env::Memis0(&params.arbitrator_pk, sizeof(params.arbitrator_pk)));
+    Env::Halt_if(Env::Memis0(&params.treasury_pk, sizeof(params.treasury_pk)));
     Env::Halt_if(params.default_review_window == 0);
     Env::Halt_if(params.arbitrator_timeout_blocks == 0);
     KeyParams key;
@@ -102,14 +103,22 @@ BEAM_EXPORT void Method_5(void*) { Env::Halt(); }
 BEAM_EXPORT void Method_6(const Idios::Refund& args) {
     Idios::Job job;
     Env::Halt_if(!LoadJob(args.job_id, job));
-    Env::Halt_if(job.status == Idios::JobStatus::Settled);
-    Env::Halt_if(job.status == Idios::JobStatus::Refunded);
-    Env::Halt_if(job.status == Idios::JobStatus::Disputed);
-    Env::Halt_if(job.status == Idios::JobStatus::AwaitingApproval);
+    // Refund is valid only before settlement/resolution: Open (no node
+    // committed yet) or Active (node committed but failed to deliver by
+    // expiry). Explicit allow-list on purpose -- the previous deny-list
+    // silently permitted Refund from ResolvedToAlice/ResolvedToBob/Closed,
+    // letting a requester race the rightful claimant or double-unlock.
+    Env::Halt_if(job.status != Idios::JobStatus::Open &&
+                 job.status != Idios::JobStatus::Active);
     Env::Halt_if(Env::get_Height() <= job.expiry_block);
 
     Env::AddSig(job.requester_pk);
-    Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
+    // Requester is made whole (payment returned). On the Active path the
+    // node's collateral is forfeit and intentionally NOT returned to the
+    // requester -- it stays locked until the treasury claims it via
+    // TreasurySweep (Method_19), so the requester cannot profit from
+    // inducing non-delivery. Open jobs have collateral == 0.
+    Env::FundsUnlock(job.asset_id, job.payment);
     job.status = Idios::JobStatus::Refunded;
     SaveJob(job);
 }
@@ -158,7 +167,9 @@ BEAM_EXPORT void Method_9(const Idios::SubmitDelivery& args) {
     if (job.mode == Idios::JobMode::ModeA) {
         Env::Halt_if(!HashesMatch(args.delivery_hash, job.result_hash));
         Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
-        job.status = Idios::JobStatus::Settled;
+        // Mode A auto-settles here; mark terminal so Claim's Settled branch
+        // cannot unlock a second time. (Was: Settled.)
+        job.status = Idios::JobStatus::Closed;
     } else {
         job.review_deadline_block = Env::get_Height() + job.review_window_blocks;
         job.status = Idios::JobStatus::AwaitingApproval;
@@ -251,5 +262,82 @@ BEAM_EXPORT void Method_15(const Idios::Claim& args) {
     }
 
     job.status = Idios::JobStatus::Closed;
+    SaveJob(job);
+}
+
+// ---------------------------------------------------------------------------
+// Arbitrator-timeout path: if a dispute is never resolved, neither party
+// should be able to win by stalling, and an innocent party should not lose
+// their own stake. So a stale dispute is Voided: each party reclaims their
+// own principal, and the unawardable dispute_fee goes to the treasury.
+// ---------------------------------------------------------------------------
+
+// Method_16: flip a dispute the arbitrator never resolved into Voided.
+// Permissionless on purpose -- no AddSig. It moves no funds and is gated by
+// an objective on-chain timeout, so anyone may trigger it and neither party
+// can block the other. (If the toolchain requires a signer, gate on
+// job.requester_pk; see app handler note.)
+BEAM_EXPORT void Method_16(const Idios::VoidStaleDispute& args) {
+    Idios::Job job;
+    Env::Halt_if(!LoadJob(args.job_id, job));
+    Env::Halt_if(job.status != Idios::JobStatus::Disputed);
+
+    Idios::Params params;
+    Env::Halt_if(!LoadParams(params));
+    Env::Halt_if(Env::get_Height() <=
+                 job.dispute_filed_block + params.arbitrator_timeout_blocks);
+
+    job.status = Idios::JobStatus::Voided;
+    SaveJob(job);
+}
+
+// Method_17: requester reclaims their payment from a voided dispute.
+// payment is zeroed on success so it cannot be pulled twice.
+BEAM_EXPORT void Method_17(const Idios::VoidClaimRequester& args) {
+    Idios::Job job;
+    Env::Halt_if(!LoadJob(args.job_id, job));
+    Env::Halt_if(job.status != Idios::JobStatus::Voided);
+    Env::Halt_if(job.payment == 0);
+
+    Env::AddSig(job.requester_pk);
+    Env::FundsUnlock(job.asset_id, job.payment);
+    job.payment = 0;
+    SaveJob(job);
+}
+
+// Method_18: node reclaims their collateral from a voided dispute.
+BEAM_EXPORT void Method_18(const Idios::VoidClaimNode& args) {
+    Idios::Job job;
+    Env::Halt_if(!LoadJob(args.job_id, job));
+    Env::Halt_if(job.status != Idios::JobStatus::Voided);
+    Env::Halt_if(job.collateral == 0);
+
+    Env::AddSig(job.node_pk);
+    Env::FundsUnlock(job.asset_id, job.collateral);
+    job.collateral = 0;
+    SaveJob(job);
+}
+
+// Method_19: treasury sweep. Collects the only funds forfeit to the protocol:
+//   - Refunded jobs: the node's collateral (non-delivery penalty), and
+//   - Voided jobs:   the unawardable dispute_fee.
+// Each portion is zeroed on sweep to prevent a second pull.
+BEAM_EXPORT void Method_19(const Idios::TreasurySweep& args) {
+    Idios::Job job;
+    Env::Halt_if(!LoadJob(args.job_id, job));
+
+    Idios::Params params;
+    Env::Halt_if(!LoadParams(params));
+    Env::AddSig(params.treasury_pk);
+
+    if (job.status == Idios::JobStatus::Refunded && job.collateral > 0) {
+        Env::FundsUnlock(job.asset_id, job.collateral);
+        job.collateral = 0;
+    } else if (job.status == Idios::JobStatus::Voided && job.dispute_fee > 0) {
+        Env::FundsUnlock(job.asset_id, job.dispute_fee);
+        job.dispute_fee = 0;
+    } else {
+        Env::Halt();
+    }
     SaveJob(job);
 }

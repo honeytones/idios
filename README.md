@@ -4,7 +4,7 @@
 
 Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on-chain dispute resolution. No public record of amounts or parties.
 
-**[Website](https://honeytones.github.io/idios-site/)** · **[AI and compute use cases](https://honeytones.github.io/idios-site/private-ai-escrow.html)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45)**
+**[Website](https://honeytones.github.io/idios-site/)** · **[AI and compute use cases](https://honeytones.github.io/idios-site/private-ai-escrow.html)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb)**
 
 > "Pay privately. Verify on chain. Dispute when needed."
 
@@ -60,29 +60,30 @@ Idios v3 uses a two phase claim pattern. Authorisation methods (approve, resolve
 
 **Live on Beam mainnet** ✅
 
-- v3 contract deployed at block 3842196 (May 2, 2026)
+- v4 contract deployed at block 3898709 (June 10, 2026)
 - Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds
-- Dapp v3.1.7 published, supports both modes via UI
+- Dapp 3.1.8 published, supports both modes via UI
 
 **Verified resolution paths (real funds, mainnet):**
 
 | Path | Status flow | Job |
 |------|-------------|-----|
-| Mode A hash match | Open → Active → Settled (single tx) | 22224 |
+| Mode A hash match | Open → Active → Closed (single tx) | 22224 |
 | Mode B approve | Open → Active → AwaitingApproval → Settled → Closed | 11112, 33335 |
 | Mode B dispute, resolved to worker | Open → Active → AwaitingApproval → Disputed → ResolvedToBob → Closed | 11113 |
 | Mode B dispute, resolved to requester | Open → Active → AwaitingApproval → Disputed → ResolvedToAlice → Closed | 11114 |
 | Mode B timeout | Open → Active → AwaitingApproval → Settled → Closed | 11115 |
+| Mode B arbitrator timeout void | Open → Active → AwaitingApproval → Disputed → Voided | 20002 |
 
 ---
 
 ## Contract
 
 ```
-CID: f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45
-Deployed at block: 3842196
+CID: ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb
+Deployed at block: 3898709
 Constructor params: default_review_window=10080, arbitrator_timeout_blocks=20160
-Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45
+Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb
 ```
 
 ### Roles
@@ -92,6 +93,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 | `user` | Requester (Alice) or worker (Bob) interacting with the contract lifecycle |
 | `arbitrator` | Single on-chain arbitrator (set at deploy) who can resolve disputes |
 | `manager` | Deploy and view contract params (one-shot, used during contract setup) |
+| `treasury` | Protocol treasury, set at deploy from the deploying wallet. Collects forfeited worker collateral from Active refunds and dispute fees from voided disputes via `sweep`. |
 
 ### Actions per role
 
@@ -102,12 +104,15 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 | `create_a` | Create a Mode A contract (Hash-verified Settlement). Locks payment. |
 | `create_b` | Create a Mode B contract (Reviewed Settlement). Locks payment, sets review window and dispute fee. |
 | `commit` | Worker locks collateral, status moves to Active. |
-| `submit_delivery` | Worker submits result hash. In Mode A, settles atomically if hash matches. In Mode B, sets AwaitingApproval. |
+| `submit_delivery` | Worker submits result hash. In Mode A, pays out atomically if the hash matches and the contract moves straight to Closed. In Mode B, sets AwaitingApproval. |
 | `approve` | Requester approves Mode B delivery, status moves to Settled (no funds yet). |
 | `dispute` | Requester disputes Mode B delivery, locks dispute fee, status moves to Disputed. |
 | `claim_after_timeout` | Worker claims after review window expires (Mode B), status moves to Settled. |
-| `claim` | Beneficiary collects funds from a Settled, ResolvedToBob, or ResolvedToAlice contract. Status moves to Closed. |
-| `refund` | Requester reclaims funds from an expired Open contract. Status moves to Refunded. |
+| `claim` | Beneficiary collects funds from a Settled, ResolvedToBob, or ResolvedToAlice contract. Status moves to Closed. Mode A contracts pay out automatically and cannot be claimed. |
+| `refund` | Requester reclaims their payment from an expired contract (Open or Active). On the Active path the worker's collateral is forfeited to the treasury. Status moves to Refunded. |
+| `void_dispute` | Permissionless. Anyone can void a dispute the arbitrator never resolved, once `arbitrator_timeout_blocks` have passed since it was filed. Status moves to Voided. |
+| `void_claim_requester` | Requester reclaims their payment from a Voided contract. |
+| `void_claim_node` | Worker reclaims their collateral from a Voided contract. |
 | `view_job` | Read current job state. |
 | `get_key` | Returns the user's pubkey for this contract. (Worker shares this with requester before create.) |
 
@@ -118,6 +123,13 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 | `resolve_alice` | Resolve a Disputed contract in favour of the requester. Status moves to ResolvedToAlice. |
 | `resolve_bob` | Resolve a Disputed contract in favour of the worker. Status moves to ResolvedToBob. |
 | `get_key` | Returns the arbitrator's pubkey for this contract. |
+
+**treasury actions**
+
+| Action | Description |
+|--------|-------------|
+| `sweep` | Collects forfeited funds: worker collateral from a Refunded contract that went through the Active path, or the dispute fee from a Voided contract. |
+| `get_key` | Returns the treasury's pubkey for this contract. |
 
 ### Status codes
 
@@ -131,6 +143,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f40eb64da6
 6 = ResolvedToAlice    (arbitrator sided with requester, requester can claim)
 7 = ResolvedToBob      (arbitrator sided with worker, worker can claim)
 8 = Closed             (terminal, claim has been collected)
+9 = Voided             (terminal, arbitrator never resolved a dispute in time, parties reclaim)
 ```
 
 ---
@@ -173,7 +186,7 @@ The worker's pubkey is contract-specific (because the CID is part of the key der
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=get_key,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45" \
+  --shader_args="role=user,action=get_key,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -184,7 +197,7 @@ The output is the worker's `node_pk` for that contract. Send this to the request
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=view_job,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --shader_args="role=user,action=view_job,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -193,7 +206,7 @@ The output is the worker's `node_pk` for that contract. Send this to the request
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=create_a,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,payment=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>,result_hash=<HASH>" \
+  --shader_args="role=user,action=create_a,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,payment=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>,result_hash=<HASH>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -204,7 +217,7 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=create_b,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,review_window_blocks=<N>,payment=<GROTH>,dispute_fee=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>" \
+  --shader_args="role=user,action=create_b,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,review_window_blocks=<N>,payment=<GROTH>,dispute_fee=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -213,7 +226,7 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=commit,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=commit,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>,collateral=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -222,7 +235,7 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=submit_delivery,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,delivery_hash=<HASH>,mode=<65|66>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=submit_delivery,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>,delivery_hash=<HASH>,mode=<65|66>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -233,17 +246,17 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 # Requester approves
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=approve,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --shader_args="role=user,action=approve,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 
 # Requester disputes
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=dispute,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,dispute_fee=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=dispute,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>,dispute_fee=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 
 # Worker claims after review window expires
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=claim_after_timeout,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --shader_args="role=user,action=claim_after_timeout,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -254,12 +267,12 @@ The arbitrator wallet is the one that originally deployed the contract.
 ```bash
 # Resolve in favour of requester
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=arbitrator,action=resolve_alice,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --shader_args="role=arbitrator,action=resolve_alice,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 
 # Resolve in favour of worker
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=arbitrator,action=resolve_bob,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>" \
+  --shader_args="role=arbitrator,action=resolve_bob,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -269,7 +282,7 @@ After Settled, ResolvedToBob, or ResolvedToAlice, the beneficiary calls `claim`.
 
 ```bash
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=claim,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,total=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=claim,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>,total=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -279,7 +292,7 @@ For an Open contract whose `expiry_block` has passed without anyone committing.
 
 ```bash
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=refund,cid=f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45,job_id=<N>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=refund,cid=ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb,job_id=<N>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -317,11 +330,13 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 **Arbitrator contact.** To reach the arbitrator for dispute resolution, message **@tappyoak** on Telegram. Include the contract ID, your role, and a brief description of the dispute.
 
-**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The dapp ships an in-dapp arbitrator console so the arbitrator can track and resolve Disputed contracts from the UI. M of N multi-arbitrator resolution comes in Phase 1 (v4 contract).
+**Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The dapp ships an in-dapp arbitrator console so the arbitrator can track and resolve Disputed contracts from the UI. M of N multi-arbitrator resolution is planned for a future contract revision.
 
 **Contract-specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
 
-**Refund semantics.** `refund` only works for jobs that never had a worker commit (status=Open) and whose `expiry_block` has passed. Once a worker has committed, refund is no longer available. The job must complete one of the resolution paths instead.
+**Refund semantics.** `refund` returns the requester's payment from an expired contract once `expiry_block` has passed, and it works in two cases. If no worker ever committed (status Open), the payment is simply returned. If a worker committed but never delivered (status Active), the requester still gets only the payment back and the worker's collateral is forfeited to the treasury, not returned to either side. This penalises a worker who locked in and then went silent, and it stops a requester from setting a tight expiry to grab the worker's stake, since the stake always goes to the treasury and never to the requester. A job that has been delivered cannot be refunded, it must complete a resolution path.
+
+**Void semantics.** If a dispute is filed and the arbitrator never resolves it within `arbitrator_timeout_blocks`, anyone can call `void_dispute` after that window to move the contract to Voided. The requester then reclaims their payment with `void_claim_requester`, the worker reclaims their collateral with `void_claim_node`, and the treasury sweeps the dispute fee. This guarantees funds can never be trapped by an absent arbitrator.
 
 **No bridge, no cross chain.** Idios runs entirely on Beam mainnet. No wrapped assets, no second chain.
 

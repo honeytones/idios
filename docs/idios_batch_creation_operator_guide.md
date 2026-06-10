@@ -125,7 +125,7 @@ You can define more than one batch in the batches list. Each is processed indepe
 
 ## On-chain test reference
 
-Batch creation confirmed working on Beam mainnet against contract f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45:
+Batch creation confirmed working on Beam mainnet against contract ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb:
 
 | Job IDs | Method | Result |
 |---|---|---|
