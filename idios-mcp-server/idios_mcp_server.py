@@ -42,6 +42,7 @@ import json
 import getpass
 import logging
 import subprocess
+import threading
 import argparse
 from typing import Optional
 
@@ -73,6 +74,11 @@ STATUS_NAMES = {
 # Global config and password set at startup before serving.
 _cfg: dict = {}
 _password: str = ""
+
+# The CLI wallet allows only one beam-wallet process at a time (wallet.db
+# lock). Serialise every wallet subprocess so parallel tool calls from the
+# agent queue instead of deadlocking against each other.
+_shader_lock = threading.Lock()
 
 
 def _parse_shader_output(stdout_text: str) -> Optional[dict]:
@@ -110,13 +116,14 @@ def _call_shader(shader_args: str) -> tuple:
     ]
     wallet_cwd = os.path.dirname(_cfg["beam_wallet_binary"])
     try:
-        proc = subprocess.run(
-            cmd,
-            input=b"y\n",
-            capture_output=True,
-            timeout=SHADER_TIMEOUT_SECONDS,
-            cwd=wallet_cwd,
-        )
+        with _shader_lock:
+            proc = subprocess.run(
+                cmd,
+                input=b"y\n",
+                capture_output=True,
+                timeout=SHADER_TIMEOUT_SECONDS,
+                cwd=wallet_cwd,
+            )
     except subprocess.TimeoutExpired:
         return False, None, "Shader call timed out after {}s".format(SHADER_TIMEOUT_SECONDS)
 
@@ -231,13 +238,14 @@ def get_chain_info() -> str:
         "--pass=" + _password,
     ]
     try:
-        result = subprocess.run(
-            cmd,
-            cwd=os.path.dirname(_cfg["beam_wallet_binary"]),
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        with _shader_lock:
+            result = subprocess.run(
+                cmd,
+                cwd=os.path.dirname(_cfg["beam_wallet_binary"]),
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
     except Exception as e:
         return "Error reading chain info: " + str(e)
     out = result.stdout + result.stderr
@@ -650,8 +658,14 @@ def void_dispute(job_id: int) -> str:
     anyone can call it once arbitrator_timeout_blocks have passed since the
     dispute was filed. The condition is strict: current block height must be
     GREATER than dispute_filed_block + arbitrator_timeout_blocks. A call
-    exactly on the boundary fails; it succeeds from the next block. On the
-    production contract the timeout is 20160 blocks, roughly 14 days.
+    exactly on the boundary fails; it succeeds from the next block.
+
+    arbitrator_timeout_blocks is a per contract deployment parameter, not a
+    universal constant. Never assume a value: compute eligibility from
+    dispute_filed_block in view_contract plus the timeout of the contract
+    this server is configured for. On the v4 production contract it is
+    20160 blocks, roughly 14 days; test deployments may use far shorter
+    values.
 
     Voiding moves the contract to Voided status. Neither party wins: each
     side then reclaims its own principal. After voiding, the requester calls
