@@ -612,7 +612,10 @@ def handle_worker_job(cfg, password, job_cfg, state, logger,
     Idempotent. Each transition is fired at most once thanks to durable state.
     """
     job_id = job_cfg["job_id"]
-    job_state_key = str(job_id)
+    # Namespace state by role: a single job_id can appear twice in config
+    # (once as worker, once as client) for a self-dealing setup, and they
+    # must not share a state object or one role's flags block the other's.
+    job_state_key = "worker:" + str(job_id)
     job_state = state.setdefault(job_state_key, {
         "last_status": None,
         "commit_fired": False,
@@ -722,7 +725,7 @@ def handle_client_job(cfg, password, job_cfg, state, logger,
     needs no claim, funds return in the refund tx itself.
     """
     job_id = job_cfg["job_id"]
-    job_state_key = str(job_id)
+    job_state_key = "client:" + str(job_id)
     job_state = state.setdefault(job_state_key, {
         "last_status": None,
         "approve_fired": False,
@@ -840,7 +843,7 @@ def handle_arbitrator_job(cfg, password, job_cfg, state, logger):
     held by the contract during dispute).
     """
     job_id = job_cfg["job_id"]
-    job_state_key = str(job_id)
+    job_state_key = "arbitrator:" + str(job_id)
     job_state = state.setdefault(job_state_key, {
         "last_status": None,
         "resolved": False,

@@ -17,3 +17,7 @@ beam-wallet.cfg
 *.bak
 *.before_*
 *.v1backup
+README.md.v3bak
+idios-agent-daemon/config.test.json
+idios-agent-daemon/jobs-state-test.json
+*.cast
