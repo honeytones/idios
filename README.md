@@ -177,7 +177,7 @@ The Beam CLI wallet drives the contract directly. Useful for scripting, building
 - A copy of `idios_app.wasm` (downloadable from this repo or built from source, see [Build](#build))
 - A Beam mainnet node to connect to. Run your own, or use a public node like `eu-node01.mainnet.beam.mw:8100`.
 
-All examples use `cid=f40eb64d...` (v3) and a public node. Substitute your own as needed.
+All examples use the v4 production contract `cid=ed788e2f...` and a public node. Substitute your own as needed.
 
 ### Get worker pubkey for this contract
 
