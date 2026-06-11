@@ -162,3 +162,27 @@ export async function resolveToBob(job_id, total, asset_id = 0) {
         invokeContract(args, resolve, reject);
     });
 }
+
+export async function voidDispute(job_id) {
+    await loadShader();
+    return new Promise((resolve, reject) => {
+        const args = `role=user,action=void_dispute,cid=${CID},job_id=${job_id}`;
+        invokeContract(args, resolve, reject);
+    });
+}
+
+export async function voidClaimRequester(job_id) {
+    await loadShader();
+    return new Promise((resolve, reject) => {
+        const args = `role=user,action=void_claim_requester,cid=${CID},job_id=${job_id}`;
+        invokeContract(args, resolve, reject);
+    });
+}
+
+export async function voidClaimNode(job_id) {
+    await loadShader();
+    return new Promise((resolve, reject) => {
+        const args = `role=user,action=void_claim_node,cid=${CID},job_id=${job_id}`;
+        invokeContract(args, resolve, reject);
+    });
+}

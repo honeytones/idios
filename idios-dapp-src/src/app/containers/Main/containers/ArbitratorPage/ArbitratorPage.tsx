@@ -223,6 +223,7 @@ const statusToText = (status: number | undefined): string => {
     case 6: return "Resolved to Requester";
     case 7: return "Resolved to Worker";
     case 8: return "Closed";
+    case 9: return "Voided";
     default: return "Unknown";
   }
 };

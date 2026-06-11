@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { styled } from '@linaria/react';
 import { ROUTES_PATH, ROUTES_FULL } from '@app/shared/constants';
 import { getTrackedJobs, removeTrackedJob, addTrackedJob, TrackedJob } from '@app/core/jobs';
-import { viewJob, refundJob, claimJob, approveJob, disputeJob, commitJob, submitDelivery, claimAfterTimeout } from '@app/core/api';
+import { viewJob, refundJob, claimJob, approveJob, disputeJob, commitJob, submitDelivery, claimAfterTimeout, voidDispute, voidClaimRequester, voidClaimNode } from '@app/core/api';
 
 const Container = styled.div`
   display: flex;
@@ -428,6 +428,7 @@ const statusToText = (status: number | undefined): string => {
     case 6: return 'Resolved to Requester';
     case 7: return 'Resolved to Worker';
     case 8: return 'Closed';
+    case 9: return 'Voided';
     default: return 'Unknown';
   }
 };
@@ -454,6 +455,8 @@ const MyJobsPage: React.FC = () => {
   const [committingId, setCommittingId] = useState<number | null>(null);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
   const [claimingTimeoutId, setClaimingTimeoutId] = useState<number | null>(null);
+  const [voidingId, setVoidingId] = useState<number | null>(null);
+  const [voidClaimingId, setVoidClaimingId] = useState<number | null>(null);
   const [exportJob, setExportJob] = useState<JobWithState | null>(null);
   const [exportRole, setExportRole] = useState<'worker' | 'requester'>('worker');
   const [exportHash, setExportHash] = useState('');
@@ -622,6 +625,38 @@ const MyJobsPage: React.FC = () => {
       alert('Claim after timeout failed. The review window may not have passed yet. See console for details.');
     } finally {
       setClaimingTimeoutId(null);
+    }
+  };
+
+  const handleVoidDispute = async (job: JobWithState) => {
+    if (!job.state) return;
+    setVoidingId(job.jobId);
+    try {
+      await voidDispute(job.jobId);
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Void dispute failed:', err);
+      alert('Void failed. A dispute can only be voided once the arbitrator timeout has passed (about 14 days after the dispute was filed on the production contract). Try again later. See console for details.');
+    } finally {
+      setVoidingId(null);
+    }
+  };
+
+  const handleVoidClaim = async (job: JobWithState) => {
+    if (!job.state) return;
+    setVoidClaimingId(job.jobId);
+    try {
+      if (job.role === 'requester') {
+        await voidClaimRequester(job.jobId);
+      } else {
+        await voidClaimNode(job.jobId);
+      }
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Void claim failed:', err);
+      alert('Reclaim failed. See console for details.');
+    } finally {
+      setVoidClaimingId(null);
     }
   };
 
@@ -808,6 +843,24 @@ const MyJobsPage: React.FC = () => {
                 disabled={claimingTimeoutId === job.jobId}
               >
                 {claimingTimeoutId === job.jobId ? 'Claiming...' : 'Claim After Timeout'}
+              </ActionButton>
+            )}
+            {job.state && job.state.status === 3 && (job.role === 'worker' || job.role === 'requester') && (
+              <ActionButton
+                onClick={() => handleVoidDispute(job)}
+                disabled={voidingId === job.jobId}
+              >
+                {voidingId === job.jobId ? 'Voiding...' : 'Void Stale Dispute'}
+              </ActionButton>
+            )}
+            {job.state && job.state.status === 9 && (job.role === 'worker' || job.role === 'requester') && (
+              <ActionButton
+                onClick={() => handleVoidClaim(job)}
+                disabled={voidClaimingId === job.jobId}
+              >
+                {voidClaimingId === job.jobId
+                  ? 'Reclaiming...'
+                  : job.role === 'requester' ? 'Reclaim Payment' : 'Reclaim Collateral'}
               </ActionButton>
             )}
             {job.state && (job.role === 'worker' || job.role === 'requester') && (
