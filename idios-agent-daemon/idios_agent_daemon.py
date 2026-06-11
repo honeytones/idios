@@ -2,15 +2,27 @@
 """
 Idios agent runtime daemon (MVP).
 
-Watches a list of Idios jobs and automates the worker side of the state machine
-by shelling out to beam-wallet shader. Mode A worker loop only in this MVP:
+Watches a list of Idios jobs and automates the worker and client sides of the
+state machine by shelling out to beam-wallet shader.
 
-    status=Open       -> fire commit (collateral)
-    status=Active     -> fire submit_delivery (with pre-configured delivery_hash)
-    status=Settled    -> fire claim
+Worker role:
+    status=Open          -> fire commit (collateral from config)
+    status=Active        -> fire submit_delivery (pre-configured delivery_hash)
+                            Mode A auto-settles to Closed at delivery, no claim.
+    status=Settled       -> fire claim (Mode B approve path)
+    status=ResolvedToBob -> fire claim (won dispute)
+    status=Disputed      -> fire void_dispute once past the arbitrator timeout
+    status=Voided        -> fire void_claim_node to reclaim collateral
 
-Client and arbitrator roles are not handled by this MVP. Disputed and other
-terminal states are logged and left alone.
+Client role (all auto actions are config gated):
+    status=Open/Active   -> fire refund after expiry (auto_refund_after_expiry)
+    status=AwaitingApproval -> fire approve on hash match (auto_approve_on_hash_match)
+    status=ResolvedToAlice  -> fire claim (won dispute)
+    status=Disputed      -> fire void_dispute once past the arbitrator timeout
+    status=Voided        -> fire void_claim_requester to reclaim payment
+    status=Refunded      -> terminal; v4 refund returns funds in its own tx.
+
+Arbitrator role handles Disputed only, see handle_arbitrator_job.
 
 Batch creation (optional):
     A top-level "batches" key in config lets an operator define N Mode B
@@ -28,8 +40,9 @@ Run:
     python3 idios_agent_daemon.py /path/to/config.json
 
 Daemon prompts once for the wallet password at startup and holds it in memory
-for the lifetime of the process. Password is piped to each beam-wallet
-subprocess via stdin, never written to disk, never passed as a CLI arg.
+for the lifetime of the process. The password is passed to each beam-wallet
+subprocess via its --pass argument (visible in the process list while a call
+runs) and is never written to disk.
 
 The configured shader_app_file, beam_wallet_binary, wallet_path, node_addr, and
 cid are taken from config.json. See the sample config alongside this file.
@@ -238,9 +251,14 @@ def call_shader(cfg, password, shader_args, logger):
     stderr = proc.stderr.decode("utf-8", errors="replace")
     parsed = parse_shader_output(stdout)
     # beam-wallet's return code is unreliable; it often exits 1 even on
-    # successful shader execution. Trust the presence of parsed output instead.
-    # Treat as failure only if we got no shader output AND rc != 0.
-    effective_rc = 0 if parsed is not None else proc.returncode
+    # successful shader execution. Success is signalled by either parseable
+    # shader output (read-only calls) or the "Transaction completed" marker
+    # (state-changing calls, which emit no shader output object). Trust those,
+    # never the rc. Same logic as the MCP server.
+    if parsed is not None or "Transaction completed" in stdout:
+        effective_rc = 0
+    else:
+        effective_rc = proc.returncode
     if effective_rc != 0:
         logger.error("shader call failed rc=%s. stdout tail: %s | stderr tail: %s",
                      proc.returncode, stdout[-800:], stderr[-300:])
@@ -261,6 +279,47 @@ def shader_view_job(cfg, password, job_id, logger):
     if rc != 0 or parsed is None:
         return None
     return parsed.get("job") or parsed
+
+
+def shader_view_params(cfg, password, logger):
+    """Read the contract params (arbitrator_pk, treasury_pk,
+    default_review_window, arbitrator_timeout_blocks) via the manager view
+    action. Returns the params dict, or None."""
+    args = "role=manager,action=view," + build_args(cfg, [])
+    rc, _, _, parsed = call_shader(cfg, password, args, logger)
+    if rc != 0 or parsed is None:
+        return None
+    return parsed.get("params") or parsed
+
+
+def get_current_height(cfg, password, logger):
+    """Read the current block height via beam-wallet info, parsing the
+    'Current height' line. Returns int height, or None on any failure."""
+    cmd = [
+        cfg["beam_wallet_binary"], "info",
+        "--node_addr=" + cfg["node_addr"],
+        "--wallet_path=" + cfg["wallet_path"],
+        "--pass=" + password,
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            cwd=os.path.dirname(cfg["beam_wallet_binary"]),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except Exception as e:
+        logger.warning("could not read chain height: %s", e)
+        return None
+    out = proc.stdout + proc.stderr
+    for line in out.splitlines():
+        if "Current height" in line:
+            digits = "".join(ch for ch in line if ch.isdigit())
+            if digits:
+                return int(digits)
+    logger.warning("could not parse Current height from wallet info output")
+    return None
 
 
 def shader_commit(cfg, password, job_id, collateral, asset_id, logger):
@@ -286,12 +345,10 @@ def shader_submit_delivery(cfg, password, job_id, delivery_hash, mode, payment, 
     return rc == 0
 
 
-def shader_claim(cfg, password, job_id, total, asset_id, logger):
-    args = "role=user,action=claim," + build_args(cfg, [
-        ("job_id", job_id),
-        ("total", total),
-        ("asset_id", asset_id),
-    ])
+def shader_claim(cfg, password, job_id, logger):
+    """The app shader reads payment, collateral, dispute_fee and asset_id
+    from chain; only job_id is needed."""
+    args = "role=user,action=claim," + build_args(cfg, [("job_id", job_id)])
     rc, _, _, _ = call_shader(cfg, password, args, logger)
     return rc == 0
 
@@ -302,13 +359,11 @@ def shader_approve(cfg, password, job_id, logger):
     return rc == 0
 
 
-def shader_refund(cfg, password, job_id, payment, collateral, asset_id, logger):
-    args = "role=user,action=refund," + build_args(cfg, [
-        ("job_id", job_id),
-        ("payment", payment),
-        ("collateral", collateral),
-        ("asset_id", asset_id),
-    ])
+def shader_refund(cfg, password, job_id, logger):
+    """v4 refund: the shader reads payment and asset_id from chain, only
+    job_id is needed. Funds return in the refund tx itself, no claim after.
+    On the Active path the worker's collateral is forfeited to the treasury."""
+    args = "role=user,action=refund," + build_args(cfg, [("job_id", job_id)])
     rc, _, _, _ = call_shader(cfg, password, args, logger)
     return rc == 0
 
@@ -521,7 +576,37 @@ def status_name(s):
         return "Unknown(" + str(s) + ")"
 
 
-def handle_worker_job(cfg, password, job_cfg, state, logger):
+def maybe_void_stale_dispute(cfg, password, job_id, job, job_state,
+                             chain_height, arbitrator_timeout, logger):
+    """Fire void_dispute on a Disputed job once strictly past
+    dispute_filed_block + arbitrator_timeout_blocks. Permissionless on chain,
+    so either role can trigger it. No-op if height or timeout is unknown."""
+    if job_state.get("void_fired"):
+        return
+    if not arbitrator_timeout or chain_height is None:
+        logger.info("job %s: Disputed, waiting for arbitrator "
+                    "(auto-void unavailable: no chain height or timeout).", job_id)
+        return
+    filed = int(job.get("dispute_filed_block", 0))
+    if filed == 0:
+        logger.warning("job %s: Disputed but dispute_filed_block is 0, not auto-voiding.", job_id)
+        return
+    deadline = filed + int(arbitrator_timeout)
+    if chain_height <= deadline:
+        logger.info("job %s: Disputed, arbitrator can resolve until block %s "
+                    "(current %s). Waiting.", job_id, deadline, chain_height)
+        return
+    logger.info("job %s: dispute stale (deadline block %s, current %s), "
+                "firing void_dispute", job_id, deadline, chain_height)
+    if shader_void_dispute(cfg, password, job_id, logger):
+        job_state["void_fired"] = True
+        logger.info("job %s: void_dispute fired ok", job_id)
+    else:
+        logger.error("job %s: void_dispute failed", job_id)
+
+
+def handle_worker_job(cfg, password, job_cfg, state, logger,
+                      chain_height=None, arbitrator_timeout=0):
     """
     Mode A worker MVP: commit -> submit_delivery -> claim if Settled.
     Idempotent. Each transition is fired at most once thanks to durable state.
@@ -583,7 +668,7 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
         total = payment + collateral
         logger.info("job %s: firing claim, total=%s (payment %s + collateral %s)",
                     job_id, total, payment, collateral)
-        if shader_claim(cfg, password, job_id, total, asset_id, logger):
+        if shader_claim(cfg, password, job_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok, funds should be in wallet within next block",
                         job_id)
@@ -594,7 +679,7 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
     if status == STATUS_RESOLVED_TO_BOB and not job_state.get("claim_fired"):
         total = payment + collateral + int(job.get("dispute_fee", 0))
         logger.info("job %s: dispute resolved to worker, firing claim, total=%s", job_id, total)
-        if shader_claim(cfg, password, job_id, total, asset_id, logger):
+        if shader_claim(cfg, password, job_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok", job_id)
         else:
@@ -602,19 +687,39 @@ def handle_worker_job(cfg, password, job_cfg, state, logger):
         return
 
     if status == STATUS_DISPUTED:
-        logger.info("job %s: Disputed, waiting for arbitrator. Daemon takes no action.", job_id)
+        maybe_void_stale_dispute(cfg, password, job_id, job, job_state,
+                                 chain_height, arbitrator_timeout, logger)
+        return
+
+    if status == STATUS_VOIDED and not job_state.get("void_claim_fired"):
+        if collateral <= 0:
+            # Nothing to reclaim (already claimed, or never committed).
+            job_state["void_claim_fired"] = True
+            return
+        logger.info("job %s: Voided, firing void_claim_node to reclaim "
+                    "collateral %s", job_id, collateral)
+        if shader_void_claim_node(cfg, password, job_id, logger):
+            job_state["void_claim_fired"] = True
+            logger.info("job %s: void_claim_node fired ok", job_id)
+        else:
+            logger.error("job %s: void_claim_node failed", job_id)
         return
 
     if status in (STATUS_CLOSED, STATUS_REFUNDED, STATUS_RESOLVED_TO_ALICE):
         return
 
 
-def handle_client_job(cfg, password, job_cfg, state, logger):
+def handle_client_job(cfg, password, job_cfg, state, logger,
+                      chain_height=None, arbitrator_timeout=0):
     """
     Client role state machine. Default behaviour: manual approval. Operator must
     set "auto_approve_on_hash_match": true and provide "expected_delivery_hash"
-    in config to enable auto-approve. Auto-fires claim on any terminal state
-    that returns funds (ResolvedToAlice, Refunded).
+    in config to enable auto-approve. Set "auto_refund_after_expiry": true to
+    auto-refund an expired Open or Active job (on the Active path the worker's
+    collateral is forfeited to the treasury, so only enable this if that is the
+    intended remedy for non-delivery). Fires claim on ResolvedToAlice, voids a
+    stale dispute, and reclaims the payment from a Voided job. v4: Refunded
+    needs no claim, funds return in the refund tx itself.
     """
     job_id = job_cfg["job_id"]
     job_state_key = str(job_id)
@@ -638,17 +743,28 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
     delivery_hash = job.get("delivery_hash", "")
     asset_id = int(job.get("asset_id", 0))
     mode = int(job.get("mode", MODE_A))
-    asset_id = int(job.get("asset_id", 0))
 
     if job_state.get("last_status") != status:
         logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
         job_state["last_status"] = status
 
-    if status == STATUS_OPEN and not job_state.get("refund_fired"):
+    if status in (STATUS_OPEN, STATUS_ACTIVE) and not job_state.get("refund_fired"):
         if not job_cfg.get("auto_refund_after_expiry", False):
             return
-        logger.info("job %s: auto_refund_after_expiry set but daemon has no "
-                    "block-height source; manual refund needed for now.", job_id)
+        if chain_height is None:
+            logger.info("job %s: auto_refund set but chain height unavailable "
+                        "this cycle, will retry.", job_id)
+            return
+        if chain_height <= expiry_block:
+            return
+        logger.info("job %s: expired at block %s (current %s), firing refund%s",
+                    job_id, expiry_block, chain_height,
+                    " (worker collateral forfeits to treasury)" if status == STATUS_ACTIVE else "")
+        if shader_refund(cfg, password, job_id, logger):
+            job_state["refund_fired"] = True
+            logger.info("job %s: refund fired ok, payment returns in the refund tx", job_id)
+        else:
+            logger.error("job %s: refund failed", job_id)
         return
 
     if status == STATUS_AWAITING_APPROVAL and not job_state.get("approve_fired"):
@@ -675,21 +791,11 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
         return
 
     if status == STATUS_RESOLVED_TO_ALICE and not job_state.get("claim_fired"):
-        total = payment + dispute_fee
+        total = payment + collateral + dispute_fee
         logger.info("job %s: dispute resolved to client, firing claim, total=%s "
-                    "(payment %s + dispute_fee %s)",
-                    job_id, total, payment, dispute_fee)
-        if shader_claim(cfg, password, job_id, total, asset_id, logger):
-            job_state["claim_fired"] = True
-            logger.info("job %s: claim fired ok", job_id)
-        else:
-            logger.error("job %s: claim failed", job_id)
-        return
-
-    if status == STATUS_REFUNDED and not job_state.get("claim_fired"):
-        total = payment
-        logger.info("job %s: Refunded, firing claim, total=%s", job_id, total)
-        if shader_claim(cfg, password, job_id, total, asset_id, logger):
+                    "(payment %s + collateral %s + dispute_fee %s)",
+                    job_id, total, payment, collateral, dispute_fee)
+        if shader_claim(cfg, password, job_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok", job_id)
         else:
@@ -697,10 +803,26 @@ def handle_client_job(cfg, password, job_cfg, state, logger):
         return
 
     if status == STATUS_DISPUTED:
-        logger.info("job %s: Disputed, waiting for arbitrator. Daemon takes no action.", job_id)
+        maybe_void_stale_dispute(cfg, password, job_id, job, job_state,
+                                 chain_height, arbitrator_timeout, logger)
         return
 
-    if status in (STATUS_CLOSED, STATUS_RESOLVED_TO_BOB, STATUS_SETTLED):
+    if status == STATUS_VOIDED and not job_state.get("void_claim_fired"):
+        if payment <= 0:
+            job_state["void_claim_fired"] = True
+            return
+        logger.info("job %s: Voided, firing void_claim_requester to reclaim "
+                    "payment %s", job_id, payment)
+        if shader_void_claim_requester(cfg, password, job_id, logger):
+            job_state["void_claim_fired"] = True
+            logger.info("job %s: void_claim_requester fired ok", job_id)
+        else:
+            logger.error("job %s: void_claim_requester failed", job_id)
+        return
+
+    # v4: Refund returns the payment in the refund transaction itself, and
+    # Claim halts on Refunded. Refunded is terminal for the client.
+    if status in (STATUS_CLOSED, STATUS_REFUNDED, STATUS_RESOLVED_TO_BOB, STATUS_SETTLED):
         return
 
 
@@ -827,6 +949,22 @@ def main():
 
     state = load_durable_state(state_path)
 
+    # Read arbitrator_timeout_blocks once from chain. Needed for the auto
+    # void_dispute trigger; if unreadable, the daemon still runs but stale
+    # disputes must be voided manually.
+    params = shader_view_params(cfg, password, logger)
+    arbitrator_timeout = 0
+    if params:
+        try:
+            arbitrator_timeout = int(params.get("arbitrator_timeout_blocks", 0))
+        except (TypeError, ValueError):
+            arbitrator_timeout = 0
+    if arbitrator_timeout:
+        logger.info("arbitrator_timeout_blocks: %s", arbitrator_timeout)
+    else:
+        logger.warning("could not read arbitrator_timeout_blocks from chain; "
+                       "auto void_dispute disabled, void manually if needed")
+
     # Process batches once before entering the poll loop.
     run_batches(cfg, password, state, state_path, logger)
 
@@ -834,13 +972,19 @@ def main():
     try:
         while True:
             cycle_start = time.time()
+            # One height read per cycle, shared by all jobs. Used by the
+            # auto refund and auto void triggers; None just disables them
+            # for this cycle.
+            chain_height = get_current_height(cfg, password, logger)
             for job_cfg in cfg["jobs"]:
                 try:
                     role = job_cfg["role"]
                     if role == "worker":
-                        handle_worker_job(cfg, password, job_cfg, state, logger)
+                        handle_worker_job(cfg, password, job_cfg, state, logger,
+                                          chain_height, arbitrator_timeout)
                     elif role == "client":
-                        handle_client_job(cfg, password, job_cfg, state, logger)
+                        handle_client_job(cfg, password, job_cfg, state, logger,
+                                          chain_height, arbitrator_timeout)
                     elif role == "arbitrator":
                         handle_arbitrator_job(cfg, password, job_cfg, state, logger)
                 except Exception as e:

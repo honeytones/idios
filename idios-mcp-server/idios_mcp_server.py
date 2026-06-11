@@ -67,6 +67,7 @@ STATUS_NAMES = {
     6: "ResolvedToAlice",
     7: "ResolvedToBob",
     8: "Closed",
+    9: "Voided",
 }
 
 # Global config and password set at startup before serving.
@@ -176,7 +177,9 @@ mcp = FastMCP(
         "All amounts are in groth (1 BEAM = 100,000,000 groth, NPH asset_id=47 same unit). "
         "expiry_block must be in the future: use current block + 50000 for roughly 7 days. "
         "State-changing calls (commit, submit_delivery, approve, dispute, claim) "
-        "wait for on-chain confirmation and may take 1-2 minutes."
+        "wait for on-chain confirmation and may take 1-2 minutes. "
+        "If a dispute is never resolved within the arbitrator timeout, recover "
+        "funds with void_dispute, then void_claim_requester or void_claim_node."
     )
 )
 
@@ -190,7 +193,8 @@ def view_contract(job_id: int) -> str:
     dispute_fee, delivery_hash, expiry_block, mode, and asset_id.
 
     Status values: Open(0), Active(1), AwaitingApproval(2), Disputed(3),
-    Settled(4), Refunded(5), ResolvedToAlice(6), ResolvedToBob(7), Closed(8).
+    Settled(4), Refunded(5), ResolvedToAlice(6), ResolvedToBob(7), Closed(8),
+    Voided(9).
 
     Use this to check contract state before deciding what action to take.
     This call is read-only and does not require wallet funds.
@@ -449,17 +453,10 @@ def submit_delivery(job_id: int, delivery_hash: str) -> str:
     job_data = _view_state(job_id)
     if job_data is None:
         return "Cannot submit delivery: could not read contract {} state.".format(job_id)
-    payment = job_data.get("payment", 0)
-    collateral = job_data.get("collateral", 0)
     mode = job_data.get("mode", 66)
-    asset_id = job_data.get("asset_id", 0)
     args = "role=user,action=submit_delivery," + _build_args([
         ("job_id", job_id),
         ("delivery_hash", delivery_hash),
-        ("mode", mode),
-        ("payment", payment),
-        ("collateral", collateral),
-        ("asset_id", asset_id),
     ])
     ok, parsed, err = _call_shader(args)
     if not ok:
@@ -557,6 +554,7 @@ def claim_funds(job_id: int) -> str:
     STATUS_SETTLED = 4
     STATUS_RESOLVED_TO_ALICE = 6
     STATUS_RESOLVED_TO_BOB = 7
+    STATUS_VOIDED = 9
 
     if status == STATUS_SETTLED and mode == 65:
         return "Contract {} is Mode A (hash-verified) and settled automatically at delivery. Funds were released when the matching hash was submitted, so there is nothing to claim.".format(job_id)
@@ -566,6 +564,8 @@ def claim_funds(job_id: int) -> str:
         total = payment + collateral + dispute_fee
     elif status == STATUS_RESOLVED_TO_ALICE:
         total = payment + collateral + dispute_fee
+    elif status == STATUS_VOIDED:
+        return "Contract {} is Voided (arbitrator timeout). Use void_claim_requester to reclaim your payment if you are the requester, or void_claim_node to reclaim your collateral if you are the worker.".format(job_id)
     else:
         return "Contract {} is not in a claimable state. Current status: {} ({}). Claimable states: Settled, ResolvedToAlice, ResolvedToBob. A refunded contract returns funds directly, no claim needed.".format(
             job_id, status, _status_name(status)
@@ -613,37 +613,133 @@ def claim_after_timeout(job_id: int) -> str:
 @mcp.tool()
 def refund_contract(job_id: int) -> str:
     """
-    Refund an expired Open contract as the requester (Alice).
+    Refund an expired Idios contract as the requester (Alice).
 
-    Use this if the contract is in Open status (worker never committed collateral)
-    and the expiry_block has passed. Recovers your locked payment.
+    Valid in two situations, both requiring the contract's expiry_block to
+    have passed:
+    - Open (worker never committed collateral): your payment is returned.
+    - Active (worker committed collateral but never delivered): your payment
+      is returned, and the worker's collateral is forfeited to the protocol
+      treasury as a non-delivery penalty. You never receive the worker's
+      collateral yourself, so a tight expiry cannot be used to seize their
+      stake.
 
-    Note: refund only unwinds the contract, it does not penalise the worker.
-    The worker also gets their collateral back (they never committed any).
-    If a worker committed collateral and then abandoned the job, you cannot
-    refund via this path. The contract must go through dispute resolution instead.
+    Funds are returned in the refund transaction itself. No separate claim
+    is needed afterwards. Refund is not possible once a delivery has been
+    submitted (AwaitingApproval or later); use approve, dispute, or the
+    dispute resolution flow instead.
 
     Args:
         job_id: The contract ID to refund.
 
     Returns confirmation of refund, or error message.
     """
-    job_data = _view_state(job_id)
-    if job_data is None:
-        return "Cannot refund: could not read contract {} state.".format(job_id)
-    payment = int(job_data.get("payment", 0))
-    collateral = int(job_data.get("collateral", 0))
-    asset_id = int(job_data.get("asset_id", 0))
-    args = "role=user,action=refund," + _build_args([
-        ("job_id", job_id),
-        ("payment", payment),
-        ("collateral", collateral),
-        ("asset_id", asset_id),
-    ])
+    args = "role=user,action=refund," + _build_args([("job_id", job_id)])
     ok, parsed, err = _call_shader(args)
     if not ok:
         return "Error refunding contract {}: {}".format(job_id, err)
-    return "Refund submitted for contract {}. Payment will be returned to your wallet.".format(job_id)
+    return "Refund submitted for contract {}. Payment will be returned to your wallet. If the worker had committed collateral, it is forfeited to the protocol treasury.".format(job_id)
+
+
+@mcp.tool()
+def void_dispute(job_id: int) -> str:
+    """
+    Void a Disputed contract that the arbitrator never resolved.
+
+    This is the recovery path for a stale dispute. It is permissionless:
+    anyone can call it once arbitrator_timeout_blocks have passed since the
+    dispute was filed. The condition is strict: current block height must be
+    GREATER than dispute_filed_block + arbitrator_timeout_blocks. A call
+    exactly on the boundary fails; it succeeds from the next block. On the
+    production contract the timeout is 20160 blocks, roughly 14 days.
+
+    Voiding moves the contract to Voided status. Neither party wins: each
+    side then reclaims its own principal. After voiding, the requester calls
+    void_claim_requester to reclaim the payment and the worker calls
+    void_claim_node to reclaim the collateral. The dispute fee is forfeited
+    to the protocol treasury.
+
+    Check view_contract for dispute_filed_block and get_chain_info for the
+    current height before calling. If the timeout has not passed, the call
+    fails on chain.
+
+    Args:
+        job_id: The Disputed contract ID to void.
+
+    Returns confirmation of voiding, or error message.
+    """
+    args = "role=user,action=void_dispute," + _build_args([("job_id", job_id)])
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error voiding dispute for contract {}: {}".format(job_id, err)
+    return "Contract {} voided. The requester can reclaim the payment via void_claim_requester and the worker can reclaim collateral via void_claim_node.".format(job_id)
+
+
+@mcp.tool()
+def void_claim_requester(job_id: int) -> str:
+    """
+    Reclaim your payment from a Voided contract as the requester (Alice).
+
+    Use this after a stale dispute was voided via void_dispute. Returns the
+    full payment you locked at contract creation. The amount is read from
+    chain and can only be claimed once. Your dispute fee is not returned;
+    it is forfeited to the protocol treasury.
+
+    Args:
+        job_id: The Voided contract ID to reclaim payment from.
+
+    Returns confirmation of the claim, or error message.
+    """
+    args = "role=user,action=void_claim_requester," + _build_args([("job_id", job_id)])
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error reclaiming payment from voided contract {}: {}".format(job_id, err)
+    return "Payment reclaimed from voided contract {}. Funds will appear in your wallet within the next block.".format(job_id)
+
+
+@mcp.tool()
+def void_claim_node(job_id: int) -> str:
+    """
+    Reclaim your collateral from a Voided contract as the worker (Bob).
+
+    Use this after a stale dispute was voided via void_dispute. Returns the
+    full collateral you committed. The amount is read from chain and can
+    only be claimed once.
+
+    Args:
+        job_id: The Voided contract ID to reclaim collateral from.
+
+    Returns confirmation of the claim, or error message.
+    """
+    args = "role=user,action=void_claim_node," + _build_args([("job_id", job_id)])
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error reclaiming collateral from voided contract {}: {}".format(job_id, err)
+    return "Collateral reclaimed from voided contract {}. Funds will appear in your wallet within the next block.".format(job_id)
+
+
+@mcp.tool()
+def treasury_sweep(job_id: int) -> str:
+    """
+    Sweep forfeited funds to the protocol treasury.
+
+    Only succeeds if this wallet holds the treasury key (the wallet that
+    deployed the contract). Collects exactly two kinds of forfeited funds:
+    the worker's collateral from a Refunded contract that went through the
+    Active path (worker committed, never delivered), or the dispute fee
+    from a Voided contract. Each can be swept once. The call fails for any
+    other wallet or any other contract state.
+
+    Args:
+        job_id: The Refunded or Voided contract ID to sweep.
+
+    Returns confirmation of the sweep, or error message.
+    """
+    args = "role=treasury,action=sweep," + _build_args([("job_id", job_id)])
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error sweeping contract {}: {}".format(job_id, err)
+    return "Treasury sweep submitted for contract {}. Forfeited funds will appear in the treasury wallet within the next block.".format(job_id)
 
 
 def load_config(path: str) -> dict:
