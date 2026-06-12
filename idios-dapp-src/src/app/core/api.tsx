@@ -78,6 +78,13 @@ export async function approveJob(job_id) {
         invokeContract(args, resolve, reject);
     });
 }
+export async function mutualCancel(job_id) {
+    await loadShader();
+    return new Promise((resolve, reject) => {
+        const args = `role=user,action=mutual_cancel,cid=${CID},job_id=${job_id}`;
+        invokeContract(args, resolve, reject);
+    });
+}
 
 export async function disputeJob(job_id, dispute_fee, asset_id = 0) {
     await loadShader();

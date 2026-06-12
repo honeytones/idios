@@ -224,6 +224,7 @@ const statusToText = (status: number | undefined): string => {
     case 7: return "Resolved to Worker";
     case 8: return "Closed";
     case 9: return "Voided";
+    case 10: return "Cancelled";
     default: return "Unknown";
   }
 };

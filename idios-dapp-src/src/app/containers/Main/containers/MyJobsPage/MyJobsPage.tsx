@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { styled } from '@linaria/react';
 import { ROUTES_PATH, ROUTES_FULL } from '@app/shared/constants';
 import { getTrackedJobs, removeTrackedJob, addTrackedJob, TrackedJob } from '@app/core/jobs';
-import { viewJob, refundJob, claimJob, approveJob, disputeJob, commitJob, submitDelivery, claimAfterTimeout, voidDispute, voidClaimRequester, voidClaimNode } from '@app/core/api';
+import { viewJob, refundJob, claimJob, approveJob, disputeJob, commitJob, submitDelivery, claimAfterTimeout, voidDispute, voidClaimRequester, voidClaimNode, mutualCancel } from '@app/core/api';
 
 const Container = styled.div`
   display: flex;
@@ -429,6 +429,7 @@ const statusToText = (status: number | undefined): string => {
     case 7: return 'Resolved to Worker';
     case 8: return 'Closed';
     case 9: return 'Voided';
+    case 10: return 'Cancelled';
     default: return 'Unknown';
   }
 };
@@ -452,6 +453,7 @@ const MyJobsPage: React.FC = () => {
   const [claimingId, setClaimingId] = useState<number | null>(null);
   const [approvingId, setApprovingId] = useState<number | null>(null);
   const [disputingId, setDisputingId] = useState<number | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [committingId, setCommittingId] = useState<number | null>(null);
   const [submittingId, setSubmittingId] = useState<number | null>(null);
   const [claimingTimeoutId, setClaimingTimeoutId] = useState<number | null>(null);
@@ -552,6 +554,19 @@ const MyJobsPage: React.FC = () => {
       alert('Approve failed. See console for details.');
     } finally {
       setApprovingId(null);
+    }
+  };
+  const handleMutualCancel = async (job: JobWithState) => {
+    if (!job.state) return;
+    setCancellingId(job.jobId);
+    try {
+      await mutualCancel(job.jobId);
+      setTimeout(() => loadJobs(), 3000);
+    } catch (err) {
+      console.error('Mutual cancel failed:', err);
+      alert('Mutual cancel failed. See console for details.');
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -861,6 +876,14 @@ const MyJobsPage: React.FC = () => {
                 {voidClaimingId === job.jobId
                   ? 'Reclaiming...'
                   : job.role === 'requester' ? 'Reclaim Payment' : 'Reclaim Collateral'}
+              </ActionButton>
+            )}
+            {job.state && (job.state.status === 1 || job.state.status === 2) && (job.role === 'worker' || job.role === 'requester') && (
+              <ActionButton
+                onClick={() => handleMutualCancel(job)}
+                disabled={cancellingId === job.jobId}
+              >
+                {cancellingId === job.jobId ? 'Cancelling...' : 'Mutual Cancel'}
               </ActionButton>
             )}
             {job.state && (job.role === 'worker' || job.role === 'requester') && (
