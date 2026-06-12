@@ -2,14 +2,11 @@
 #include "Shaders/Math.h"
 #include "idios_contract.h"
 
-struct KeyJob {
-    uint8_t  prefix = Idios::Tags::s_Job;
-    uint64_t job_id;
-};
-
-struct KeyParams {
-    uint8_t prefix = Idios::Tags::s_Params;
-};
+// KeyJob and KeyParams now live in idios_contract.h inside its packed region
+// (v5 KeyJob padding fix): both the contract and the app shader serialize the
+// same deterministic 9-byte key.
+using Idios::KeyJob;
+using Idios::KeyParams;
 
 static bool LoadJob(uint64_t job_id, Idios::Job& job) {
     KeyJob key;
@@ -64,18 +61,20 @@ BEAM_EXPORT void Method_2(const Idios::CreateModeA& args) {
 
     Idios::Job job;
     Env::Memset(&job, 0, sizeof(job));
-    job.job_id       = args.job_id;
-    job.subnet_id    = args.subnet_id;
-    job.epoch        = args.epoch;
-    job.expiry_block = args.expiry_block;
-    job.payment      = args.payment;
-    job.collateral   = 0;
-    job.asset_id     = args.asset_id;
-    job.mode         = Idios::JobMode::ModeA;
-    job.status       = Idios::JobStatus::Open;
+    job.job_id              = args.job_id;
+    job.subnet_id           = args.subnet_id;
+    job.epoch               = args.epoch;
+    job.expiry_block        = args.expiry_block;
+    job.payment             = args.payment;
+    job.collateral          = 0;
+    job.required_collateral = args.required_collateral; // v5
+    job.asset_id            = args.asset_id;
+    job.mode                = Idios::JobMode::ModeA;
+    job.status              = Idios::JobStatus::Open;
     Env::Memcpy(&job.node_pk,      &args.node_pk,      sizeof(PubKey));
     Env::Memcpy(&job.requester_pk, &args.requester_pk, sizeof(PubKey));
     Env::Memcpy(job.result_hash,   args.result_hash,   32);
+    Env::Memcpy(job.spec_hash,     args.spec_hash,     32); // v5: optional, may be zero
 
     Env::AddSig(args.requester_pk);
     Env::FundsLock(args.asset_id, args.payment);
@@ -88,6 +87,9 @@ BEAM_EXPORT void Method_3(const Idios::Commit& args) {
     Env::Halt_if(job.status != Idios::JobStatus::Open);
     Env::Halt_if(Env::get_Height() >= job.expiry_block);
     Env::Halt_if(args.collateral == 0);
+    // v5: the requester sets a collateral floor at create; a worker cannot
+    // lock the requester in with dust collateral. 0 means no floor.
+    Env::Halt_if(args.collateral < job.required_collateral);
     Env::Halt_if(args.asset_id != job.asset_id);
 
     Env::AddSig(job.node_pk);
@@ -128,11 +130,19 @@ BEAM_EXPORT void Method_7(void*) { Env::Halt(); }
 BEAM_EXPORT void Method_8(const Idios::CreateModeB& args) {
     Env::Halt_if(args.payment == 0);
     Env::Halt_if(args.dispute_fee == 0);
-    Env::Halt_if(args.review_window_blocks == 0);
     Env::Halt_if(Env::Memis0(&args.node_pk, sizeof(args.node_pk)));
     Env::Halt_if(Env::Memis0(&args.requester_pk, sizeof(args.requester_pk)));
     Env::Halt_if(args.expiry_block <= Env::get_Height());
     Env::Halt_if(JobIdInUse(args.job_id));
+
+    // v5: review_window_blocks == 0 means use the contract default, which
+    // finally wires the previously dead params.default_review_window.
+    Height review_window = args.review_window_blocks;
+    if (review_window == 0) {
+        Idios::Params params;
+        Env::Halt_if(!LoadParams(params));
+        review_window = params.default_review_window;
+    }
 
     Idios::Job job;
     Env::Memset(&job, 0, sizeof(job));
@@ -140,15 +150,17 @@ BEAM_EXPORT void Method_8(const Idios::CreateModeB& args) {
     job.subnet_id           = args.subnet_id;
     job.epoch               = args.epoch;
     job.expiry_block        = args.expiry_block;
-    job.review_window_blocks = args.review_window_blocks;
+    job.review_window_blocks = review_window;
     job.payment             = args.payment;
     job.collateral          = 0;
+    job.required_collateral = args.required_collateral; // v5
     job.dispute_fee         = args.dispute_fee;
     job.asset_id            = args.asset_id;
     job.mode                = Idios::JobMode::ModeB;
     job.status              = Idios::JobStatus::Open;
     Env::Memcpy(&job.node_pk,      &args.node_pk,      sizeof(PubKey));
     Env::Memcpy(&job.requester_pk, &args.requester_pk, sizeof(PubKey));
+    Env::Memcpy(job.spec_hash,     args.spec_hash,     32); // v5: optional, may be zero
 
     Env::AddSig(args.requester_pk);
     Env::FundsLock(args.asset_id, args.payment);
@@ -339,5 +351,29 @@ BEAM_EXPORT void Method_19(const Idios::TreasurySweep& args) {
     } else {
         Env::Halt();
     }
+    SaveJob(job);
+}
+
+// ---------------------------------------------------------------------------
+// Method_20 (v5): mutual cancel. Both parties sign and everyone is made whole:
+// payment returns to the requester, collateral returns to the node, in this
+// transaction (no separate claim). Allowed from Active (worker committed,
+// cannot or will not deliver, both agree to walk away) and AwaitingApproval
+// (delivery happened but both agree to unwind). NOT allowed from Open (the
+// requester's refund path covers it, no counterparty has funds at risk) and
+// NOT from Disputed: cancelling around a filed dispute would strand the locked
+// dispute_fee with no recovery path (proven by the conservation fuzzer) and
+// would let a party dodge a pending ruling.
+// ---------------------------------------------------------------------------
+BEAM_EXPORT void Method_20(const Idios::MutualCancel& args) {
+    Idios::Job job;
+    Env::Halt_if(!LoadJob(args.job_id, job));
+    Env::Halt_if(job.status != Idios::JobStatus::Active &&
+                 job.status != Idios::JobStatus::AwaitingApproval);
+
+    Env::AddSig(job.requester_pk);
+    Env::AddSig(job.node_pk);
+    Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
+    job.status = Idios::JobStatus::Cancelled;
     SaveJob(job);
 }

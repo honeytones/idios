@@ -11,6 +11,19 @@ struct Tags {
     static const uint8_t s_Params = 1;
 };
 
+// Key structs live inside the packed region so the contract and the app
+// shader serialize identical, deterministic key bytes (9 bytes, no padding).
+// This is the v5 fix for the KeyJob padding issue: the old out-of-header
+// definitions had 7 indeterminate padding bytes between prefix and job_id.
+struct KeyJob {
+    uint8_t  prefix = Tags::s_Job;
+    uint64_t job_id;
+};
+
+struct KeyParams {
+    uint8_t prefix = Tags::s_Params;
+};
+
 enum JobStatus : uint8_t {
     Open              = 0,
     Active            = 1,
@@ -22,6 +35,7 @@ enum JobStatus : uint8_t {
     ResolvedToBob     = 7,
     Closed            = 8,
     Voided            = 9,   // dispute abandoned by arbitrator (timed out)
+    Cancelled         = 10,  // mutual cancel: both signed, everyone made whole
 };
 
 enum JobMode : uint8_t {
@@ -35,6 +49,7 @@ struct Job {
     Amount    payment;
     Amount    collateral;
     Amount    dispute_fee;
+    Amount    required_collateral; // v5: floor for Commit; 0 = no floor
     AssetID   asset_id;
     uint64_t  job_id;
     uint64_t  subnet_id;
@@ -45,6 +60,7 @@ struct Job {
     Height    dispute_filed_block;
     uint8_t   result_hash[32];
     uint8_t   delivery_hash[32];
+    uint8_t   spec_hash[32];         // v5: hash of the agreed work spec, stored only
     uint8_t   mode;
     JobStatus status;
 };
@@ -65,8 +81,10 @@ struct CreateModeA {
     PubKey    node_pk;
     PubKey    requester_pk;
     Amount    payment;
+    Amount    required_collateral; // v5: 0 = no floor
     AssetID   asset_id;
     uint8_t   result_hash[32];
+    uint8_t   spec_hash[32];       // v5: optional, may be zero
 };
 
 struct Commit {
@@ -87,12 +105,14 @@ struct CreateModeB {
     uint64_t  subnet_id;
     uint64_t  epoch;
     Height    expiry_block;
-    Height    review_window_blocks;
+    Height    review_window_blocks; // v5: 0 means use params.default_review_window
     PubKey    node_pk;
     PubKey    requester_pk;
     Amount    payment;
     Amount    dispute_fee;
+    Amount    required_collateral;  // v5: 0 = no floor
     AssetID   asset_id;
+    uint8_t   spec_hash[32];        // v5: optional, may be zero
 };
 
 struct SubmitDelivery {
@@ -147,6 +167,11 @@ struct VoidClaimNode {
 
 struct TreasurySweep {
     static const uint32_t s_iMethod = 19;
+    uint64_t  job_id;
+};
+
+struct MutualCancel {
+    static const uint32_t s_iMethod = 20;
     uint64_t  job_id;
 };
 

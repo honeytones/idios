@@ -110,6 +110,9 @@ void On_user_create_a(const ContractID& cid)
     if (!Env::DocGetNum32("asset_id",     &args.asset_id))     return On_error("asset_id required");
     if (!Env::DocGetBlob("node_pk",       &args.node_pk, sizeof(PubKey))) return On_error("node_pk required");
     if (!Env::DocGetBlob("result_hash",   args.result_hash, 32))           return On_error("result_hash required");
+    // v5: optional. Default 0 (no collateral floor, no spec hash) if omitted.
+    Env::DocGetNum64("required_collateral", &args.required_collateral);
+    Env::DocGetBlob("spec_hash", args.spec_hash, 32);
 
     UserKeyID kid;
     kid.m_Cid = cid;
@@ -139,11 +142,15 @@ void On_user_create_b(const ContractID& cid)
     if (!Env::DocGetNum64("subnet_id",            &args.subnet_id))            return On_error("subnet_id required");
     if (!Env::DocGetNum64("epoch",                &args.epoch))                return On_error("epoch required");
     if (!Env::DocGetNum64("expiry_block",         &args.expiry_block))         return On_error("expiry_block required");
-    if (!Env::DocGetNum64("review_window_blocks", &args.review_window_blocks)) return On_error("review_window_blocks required");
+    // v5: review_window_blocks optional, 0 (or omitted) means use the contract default.
+    Env::DocGetNum64("review_window_blocks", &args.review_window_blocks);
     if (!Env::DocGetNum64("payment",              &args.payment))              return On_error("payment required");
     if (!Env::DocGetNum64("dispute_fee",          &args.dispute_fee))          return On_error("dispute_fee required");
     if (!Env::DocGetNum32("asset_id",             &args.asset_id))             return On_error("asset_id required");
     if (!Env::DocGetBlob("node_pk",               &args.node_pk, sizeof(PubKey))) return On_error("node_pk required");
+    // v5: optional. Default 0 (no collateral floor, no spec hash) if omitted.
+    Env::DocGetNum64("required_collateral", &args.required_collateral);
+    Env::DocGetBlob("spec_hash", args.spec_hash, 32);
 
     UserKeyID kid;
     kid.m_Cid = cid;
@@ -173,14 +180,9 @@ void On_user_commit(const ContractID& cid)
     if (!Env::DocGetNum64("collateral", &args.collateral)) return On_error("collateral required");
 
     // Load Job from chain to get asset_id (worker cannot mismatch asset)
-    struct KeyJob {
-        uint8_t  prefix;
-        uint64_t job_id;
-    } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = args.job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
     Idios::Job job;
@@ -214,14 +216,9 @@ void On_user_submit_delivery(const ContractID& cid)
     if (!Env::DocGetBlob("delivery_hash",  args.delivery_hash, 32))         return On_error("delivery_hash required");
 
     // Load Job from chain to get mode, payment, collateral, asset_id
-    struct KeyJob {
-        uint8_t  prefix;
-        uint64_t job_id;
-    } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = args.job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
     Idios::Job job;
@@ -274,14 +271,9 @@ void On_user_claim(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    struct KeyJob {
-        uint8_t  prefix;
-        uint64_t job_id;
-    } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = args.job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
     Idios::Job job;
@@ -319,14 +311,9 @@ void On_user_dispute(const ContractID& cid)
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
     // Load Job from chain to get dispute_fee and asset_id
-    struct KeyJob {
-        uint8_t  prefix;
-        uint64_t job_id;
-    } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = args.job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
     Idios::Job job;
@@ -378,14 +365,9 @@ void On_user_refund(const ContractID& cid)
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
     // Load Job from chain to get payment, collateral and asset_id
-    struct KeyJob {
-        uint8_t  prefix;
-        uint64_t job_id;
-    } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = args.job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
     Idios::Job job;
@@ -504,11 +486,9 @@ void On_user_void_claim_requester(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    struct KeyJob { uint8_t prefix; uint64_t job_id; } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = args.job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
     Idios::Job job;
@@ -535,11 +515,9 @@ void On_user_void_claim_node(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    struct KeyJob { uint8_t prefix; uint64_t job_id; } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = args.job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
     Idios::Job job;
@@ -570,11 +548,9 @@ void On_treasury_sweep(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    struct KeyJob { uint8_t prefix; uint64_t job_id; } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = args.job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
     Idios::Job job;
@@ -602,6 +578,56 @@ void On_treasury_sweep(const ContractID& cid)
 }
 
 // ----------------------------------------------------------------
+//  User actions: mutual cancel (v5, Method 20)
+// ----------------------------------------------------------------
+//
+// The contract requires BOTH the requester and the node to sign one kernel
+// (Env::AddSig on each). Two cases:
+//
+//   Self-deal / single party holds both keys (every on-chain test, and any
+//   case where requester_pk == node_pk): this wallet derives its own
+//   UserKeyID, which satisfies both AddSigs, and the single GenerateKernel
+//   below works as written.
+//
+//   Two independent wallets: a single wallet cannot produce both signatures
+//   in one call. Real cross-wallet cancel needs Beam's interactive multi-party
+//   kernel flow (one party builds and partially signs, the other completes
+//   it before broadcast). That flow is NOT implemented here yet and must be
+//   verified against Beam's negotiated-transaction dapp examples before it is
+//   relied on in production. Until then, mutual cancel is usable for the
+//   self-deal test and for same-wallet contracts only.
+//
+void On_user_mutual_cancel(const ContractID& cid)
+{
+    Idios::MutualCancel args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+
+    Idios::KeyJob key;
+    key.job_id = args.job_id;
+    Env::Key_T<Idios::KeyJob> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
+
+    // Payment returns to requester, collateral to node, in this tx.
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = job.payment + job.collateral;
+    fc.m_Aid     = job.asset_id;
+    fc.m_Consume = 0;
+
+    Env::GenerateKernel(&cid, Idios::MutualCancel::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: mutual cancel (both parties, everyone whole)",
+        200000);
+}
+
+// ----------------------------------------------------------------
 //  View job
 // ----------------------------------------------------------------
 
@@ -610,14 +636,9 @@ void On_user_view_job(const ContractID& cid)
     uint64_t job_id = 0;
     if (!Env::DocGetNum64("job_id", &job_id)) return On_error("job_id required");
 
-    struct KeyJob {
-        uint8_t  prefix;
-        uint64_t job_id;
-    } key;
-    Env::Memset(&key, 0, sizeof(key));
-    key.prefix = Idios::Tags::s_Job;
+    Idios::KeyJob key;
     key.job_id = job_id;
-    Env::Key_T<KeyJob> k;
+    Env::Key_T<Idios::KeyJob> k;
     k.m_Prefix.m_Cid = cid;
     k.m_KeyInContract = key;
 
@@ -631,6 +652,7 @@ void On_user_view_job(const ContractID& cid)
     Env::DocAddNum64("payment",               job.payment);
     Env::DocAddNum64("collateral",            job.collateral);
     Env::DocAddNum64("dispute_fee",           job.dispute_fee);
+    Env::DocAddNum64("required_collateral",   job.required_collateral);
     Env::DocAddNum32("asset_id",              job.asset_id);
     Env::DocAddNum32("status",                (uint32_t)job.status);
     Env::DocAddNum32("mode",                  (uint32_t)job.mode);
@@ -642,6 +664,7 @@ void On_user_view_job(const ContractID& cid)
     Env::DocAddBlob("requester_pk",           &job.requester_pk, sizeof(PubKey));
     Env::DocAddBlob("result_hash",            job.result_hash, 32);
     Env::DocAddBlob("delivery_hash",          job.delivery_hash, 32);
+    Env::DocAddBlob("spec_hash",              job.spec_hash, 32);
 }
 
 // ----------------------------------------------------------------
@@ -671,9 +694,11 @@ BEAM_EXPORT void Method_0()
                 Env::DocAddText("epoch",        "uint64");
                 Env::DocAddText("expiry_block", "uint64");
                 Env::DocAddText("payment",      "Amount");
+                Env::DocAddText("required_collateral", "Amount (optional, 0=no floor)");
                 Env::DocAddText("asset_id",     "AssetID");
                 Env::DocAddText("node_pk",      "PubKey");
                 Env::DocAddText("result_hash",  "blob32");
+                Env::DocAddText("spec_hash",    "blob32 (optional)");
             }
             {
                 Env::DocGroup grMethod("create_b");
@@ -681,11 +706,13 @@ BEAM_EXPORT void Method_0()
                 Env::DocAddText("subnet_id",            "uint64");
                 Env::DocAddText("epoch",                "uint64");
                 Env::DocAddText("expiry_block",         "uint64");
-                Env::DocAddText("review_window_blocks", "uint64");
+                Env::DocAddText("review_window_blocks", "uint64 (optional, 0=contract default)");
                 Env::DocAddText("payment",              "Amount");
                 Env::DocAddText("dispute_fee",          "Amount");
+                Env::DocAddText("required_collateral",  "Amount (optional, 0=no floor)");
                 Env::DocAddText("asset_id",             "AssetID");
                 Env::DocAddText("node_pk",              "PubKey");
+                Env::DocAddText("spec_hash",            "blob32 (optional)");
             }
             {
                 Env::DocGroup grMethod("commit");
@@ -697,30 +724,18 @@ BEAM_EXPORT void Method_0()
                 Env::DocGroup grMethod("submit_delivery");
                 Env::DocAddText("job_id",        "uint64");
                 Env::DocAddText("delivery_hash", "blob32");
-                Env::DocAddText("mode",          "uint32");
-                Env::DocAddText("payment",       "Amount");
-                Env::DocAddText("collateral",    "Amount");
-                Env::DocAddText("asset_id",      "AssetID");
             }
             {
                 Env::DocGroup grMethod("approve");
                 Env::DocAddText("job_id",     "uint64");
-                Env::DocAddText("payment",    "Amount");
-                Env::DocAddText("collateral", "Amount");
-                Env::DocAddText("asset_id",   "AssetID");
             }
             {
                 Env::DocGroup grMethod("dispute");
                 Env::DocAddText("job_id",      "uint64");
-                Env::DocAddText("dispute_fee", "Amount");
-                Env::DocAddText("asset_id",    "AssetID");
             }
             {
                 Env::DocGroup grMethod("claim_after_timeout");
                 Env::DocAddText("job_id",     "uint64");
-                Env::DocAddText("payment",    "Amount");
-                Env::DocAddText("collateral", "Amount");
-                Env::DocAddText("asset_id",   "AssetID");
             }
             {
                 Env::DocGroup grMethod("refund");
@@ -729,8 +744,10 @@ BEAM_EXPORT void Method_0()
             {
                 Env::DocGroup grMethod("claim");
                 Env::DocAddText("job_id",   "uint64");
-                Env::DocAddText("total",    "Amount");
-                Env::DocAddText("asset_id", "AssetID");
+            }
+            {
+                Env::DocGroup grMethod("mutual_cancel");
+                Env::DocAddText("job_id", "uint64");
             }
             {
                 Env::DocGroup grMethod("void_dispute");
@@ -858,6 +875,7 @@ BEAM_EXPORT void Method_1()
         {"claim_after_timeout", On_user_claim_after_timeout},
         {"refund",              On_user_refund},
         {"claim",               On_user_claim},
+        {"mutual_cancel",         On_user_mutual_cancel},
         {"void_dispute",          On_user_void_dispute},
         {"void_claim_requester",  On_user_void_claim_requester},
         {"void_claim_node",       On_user_void_claim_node},
