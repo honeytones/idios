@@ -13,6 +13,7 @@ Worker role:
     status=ResolvedToBob -> fire claim (won dispute)
     status=Disputed      -> fire void_dispute once past the arbitrator timeout
     status=Voided        -> fire void_claim_node to reclaim collateral
+    status=Cancelled     -> terminal; mutual cancel pays out in the cancel tx
 
 Client role (all auto actions are config gated):
     status=Open/Active   -> fire refund after expiry (auto_refund_after_expiry)
@@ -21,6 +22,7 @@ Client role (all auto actions are config gated):
     status=Disputed      -> fire void_dispute once past the arbitrator timeout
     status=Voided        -> fire void_claim_requester to reclaim payment
     status=Refunded      -> terminal; v4 refund returns funds in its own tx.
+    status=Cancelled     -> terminal; mutual cancel pays out in the cancel tx
 
 Arbitrator role handles Disputed only, see handle_arbitrator_job.
 
@@ -70,6 +72,7 @@ STATUS_RESOLVED_TO_ALICE = 6
 STATUS_RESOLVED_TO_BOB = 7
 STATUS_CLOSED = 8
 STATUS_VOIDED = 9
+STATUS_CANCELLED = 10
 
 STATUS_NAMES = {
     0: "Open",
@@ -82,6 +85,7 @@ STATUS_NAMES = {
     7: "ResolvedToBob",
     8: "Closed",
     9: "Voided",
+    10: "Cancelled",
 }
 
 # Mode values are ASCII codes for 'A' and 'B', mirroring api.tsx.
@@ -708,7 +712,7 @@ def handle_worker_job(cfg, password, job_cfg, state, logger,
             logger.error("job %s: void_claim_node failed", job_id)
         return
 
-    if status in (STATUS_CLOSED, STATUS_REFUNDED, STATUS_RESOLVED_TO_ALICE):
+    if status in (STATUS_CLOSED, STATUS_REFUNDED, STATUS_RESOLVED_TO_ALICE, STATUS_CANCELLED):
         return
 
 
@@ -825,7 +829,7 @@ def handle_client_job(cfg, password, job_cfg, state, logger,
 
     # v4: Refund returns the payment in the refund transaction itself, and
     # Claim halts on Refunded. Refunded is terminal for the client.
-    if status in (STATUS_CLOSED, STATUS_REFUNDED, STATUS_RESOLVED_TO_BOB, STATUS_SETTLED):
+    if status in (STATUS_CLOSED, STATUS_REFUNDED, STATUS_RESOLVED_TO_BOB, STATUS_SETTLED, STATUS_CANCELLED):
         return
 
 
