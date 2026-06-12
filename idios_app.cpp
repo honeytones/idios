@@ -585,9 +585,9 @@ void On_treasury_sweep(const ContractID& cid)
 // (Env::AddSig on each). Two cases:
 //
 //   Self-deal / single party holds both keys (every on-chain test, and any
-//   case where requester_pk == node_pk): this wallet derives its own
-//   UserKeyID, which satisfies both AddSigs, and the single GenerateKernel
-//   below works as written.
+//   case where requester_pk == node_pk): the kernel still needs one
+//   signature slot PER AddSig (CheckSigs: nKeys = AddSigs + 1), so we pass
+//   this wallet's UserKeyID twice, filling both slots with the same key.
 //
 //   Two independent wallets: a single wallet cannot produce both signatures
 //   in one call. Real cross-wallet cancel needs Beam's interactive multi-party
@@ -612,9 +612,14 @@ void On_user_mutual_cancel(const ContractID& cid)
     if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
 
     // Payment returns to requester, collateral to node, in this tx.
+    // One signature slot per contract AddSig, in AddSig order. Self-deal:
+    // the same UserKeyID fills both slots.
     UserKeyID kid;
     kid.m_Cid = cid;
-    Env::KeyID sigKid(&kid, sizeof(kid));
+    Env::KeyID pSig[2] = {
+        Env::KeyID(&kid, sizeof(kid)),
+        Env::KeyID(&kid, sizeof(kid)),
+    };
 
     FundsChange fc;
     fc.m_Amount  = job.payment + job.collateral;
@@ -622,7 +627,7 @@ void On_user_mutual_cancel(const ContractID& cid)
     fc.m_Consume = 0;
 
     Env::GenerateKernel(&cid, Idios::MutualCancel::s_iMethod,
-        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        &args, sizeof(args), &fc, 1, pSig, 2,
         "Idios: mutual cancel (both parties, everyone whole)",
         200000);
 }
