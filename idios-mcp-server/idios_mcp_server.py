@@ -69,6 +69,7 @@ STATUS_NAMES = {
     7: "ResolvedToBob",
     8: "Closed",
     9: "Voided",
+    10: "Cancelled",
 }
 
 # Global config and password set at startup before serving.
@@ -293,8 +294,10 @@ def create_contract_b(
     payment: int,
     asset_id: int,
     expiry_block: int,
-    review_window_blocks: int,
     dispute_fee: int,
+    review_window_blocks: int = 0,
+    required_collateral: int = 0,
+    spec_hash: str = "",
     subnet_id: int = 1,
     epoch: int = 1,
 ) -> str:
@@ -317,14 +320,19 @@ def create_contract_b(
         asset_id: 0 for BEAM, 47 for NPH (USD-pegged stablecoin).
         expiry_block: Block height when contract expires. Use current_block + 50000 for ~7 days.
         review_window_blocks: How long requester has to approve/dispute after delivery.
-            2000 blocks is roughly 33 hours.
+            2000 blocks is roughly 33 hours. Pass 0 (or omit) to use the
+            contract default set at deploy time.
         dispute_fee: Amount requester locks if they dispute. Lost if dispute goes against them.
+        required_collateral: Minimum collateral in groth the worker must commit.
+            The contract rejects any commit below this floor. 0 (default) = no floor.
+        spec_hash: Optional SHA-256 hash (64 char hex) of the job specification,
+            stored on chain for later reference. Omit or pass "" for none.
         subnet_id: Subnet identifier (default 1).
         epoch: Epoch (default 1).
 
     Returns confirmation once contract is on chain, or error message.
     """
-    args = "role=user,action=create_b," + _build_args([
+    parts = [
         ("job_id", job_id),
         ("subnet_id", subnet_id),
         ("epoch", epoch),
@@ -332,9 +340,13 @@ def create_contract_b(
         ("review_window_blocks", review_window_blocks),
         ("payment", payment),
         ("dispute_fee", dispute_fee),
+        ("required_collateral", required_collateral),
         ("asset_id", asset_id),
         ("node_pk", worker_pubkey),
-    ])
+    ]
+    if spec_hash:
+        parts.append(("spec_hash", spec_hash))
+    args = "role=user,action=create_b," + _build_args(parts)
     ok, parsed, err = _call_shader(args)
     if not ok:
         return "Error creating contract {}: {}".format(job_id, err)
@@ -351,6 +363,8 @@ def create_contract_a(
     asset_id: int,
     expiry_block: int,
     result_hash: str,
+    required_collateral: int = 0,
+    spec_hash: str = "",
     subnet_id: int = 1,
     epoch: int = 1,
 ) -> str:
@@ -376,12 +390,16 @@ def create_contract_a(
         asset_id: 0 for BEAM, 47 for NPH (USD-pegged stablecoin).
         expiry_block: Block height when contract expires. Use current_block + 50000 for ~7 days.
         result_hash: SHA-256 hash of the expected deliverable file (64-char hex string).
+        required_collateral: Minimum collateral in groth the worker must commit.
+            The contract rejects any commit below this floor. 0 (default) = no floor.
+        spec_hash: Optional SHA-256 hash (64 char hex) of the job specification,
+            stored on chain for later reference. Omit or pass "" for none.
         subnet_id: Subnet identifier (default 1).
         epoch: Epoch (default 1).
 
     Returns confirmation once contract is on chain, or error message.
     """
-    args = "role=user,action=create_a," + _build_args([
+    parts = [
         ("job_id", job_id),
         ("subnet_id", subnet_id),
         ("epoch", epoch),
@@ -390,7 +408,10 @@ def create_contract_a(
         ("asset_id", asset_id),
         ("node_pk", worker_pubkey),
         ("result_hash", result_hash),
-    ])
+    ]
+    if spec_hash:
+        parts.append(("spec_hash", spec_hash))
+    args = "role=user,action=create_a," + _build_args(parts)
     ok, parsed, err = _call_shader(args)
     if not ok:
         return "Error creating contract {}: {}".format(job_id, err)
@@ -497,6 +518,36 @@ def approve_delivery(job_id: int) -> str:
     if not ok:
         return "Error approving contract {}: {}".format(job_id, err)
     return "Contract {} approved. Worker can now claim payment and collateral.".format(job_id)
+
+
+@mcp.tool()
+def mutual_cancel(job_id: int) -> str:
+    """
+    Cancel an Active or AwaitingApproval contract by mutual agreement, with
+    everyone made whole.
+
+    The contract requires signatures from BOTH the requester and the worker
+    on one transaction. In the current implementation both signatures come
+    from this wallet, so mutual cancel works when the same wallet holds both
+    roles (self dealing tests, or contracts where both pubkeys were derived
+    from this wallet). True cross wallet co signing is not implemented yet.
+
+    On success the payment returns to the requester and the collateral to
+    the worker in the cancel transaction itself; there is no separate claim
+    step. The contract reaches the terminal Cancelled state. Not allowed
+    from Open (nothing to mutually cancel) or Disputed (the arbitrator owns
+    the outcome).
+
+    Args:
+        job_id: The contract ID to cancel.
+
+    Returns confirmation of cancellation, or error message.
+    """
+    args = "role=user,action=mutual_cancel," + _build_args([("job_id", job_id)])
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error cancelling contract {}: {}".format(job_id, err)
+    return "Contract {} cancelled by mutual agreement. Payment returned to requester, collateral to worker, in the cancel transaction.".format(job_id)
 
 
 @mcp.tool()
