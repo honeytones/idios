@@ -496,10 +496,7 @@ const MyJobsPage: React.FC = () => {
     if (!job.state) return;
     setRefundingId(job.jobId);
     try {
-      const payment = job.state.payment || 0;
-      const collateral = job.state.collateral || 0;
-      const asset_id = job.state.asset_id || 0;
-      await refundJob(job.jobId, payment, collateral, asset_id);
+      await refundJob(job.jobId);
       // Refresh after a moment so the state has time to update on chain
       setTimeout(() => loadJobs(), 3000);
     } catch (err) {
@@ -514,14 +511,7 @@ const MyJobsPage: React.FC = () => {
     if (!job.state) return;
     setClaimingId(job.jobId);
     try {
-      const payment = job.state.payment || 0;
-      const collateral = job.state.collateral || 0;
-      const dispute_fee = job.state.dispute_fee || 0;
-      let total = payment + collateral;
-      if (job.state.status === 6 || job.state.status === 7) {
-        total += dispute_fee;
-      }
-      await claimJob(job.jobId, total, job.state.asset_id || 0);
+      await claimJob(job.jobId);
       setTimeout(() => loadJobs(), 3000);
     } catch (err) {
       console.error('Claim failed:', err);
@@ -616,10 +606,7 @@ const MyJobsPage: React.FC = () => {
     }
     setSubmittingId(job.jobId);
     try {
-      const mode = job.state.mode === 65 ? 'A' : 'B';
-      const payment = job.state.payment || 0;
-      const collateral = job.state.collateral || 0;
-      await submitDelivery(job.jobId, delivery_hash.trim(), mode, payment, collateral, job.state.asset_id || 0);
+      await submitDelivery(job.jobId, delivery_hash.trim());
       setTimeout(() => loadJobs(), 3000);
     } catch (err) {
       console.error('Submit delivery failed:', err);

@@ -295,7 +295,7 @@ const ArbitratorPage: React.FC = () => {
     if (!confirm("Resolve to Requester? This sends " + grothToBeam(total) + " BEAM (payment + collateral + dispute fee) to the requester. Worker forfeits their collateral.")) return;
     try {
       setResolvingAliceId(job.jobId);
-      await resolveToAlice(job.jobId, total, job.state?.asset_id || 0);
+      await resolveToAlice(job.jobId);
       setTimeout(loadJobs, 3000);
     } catch (err: any) {
       alert("Resolve to Requester failed: " + String(err));
@@ -310,7 +310,7 @@ const ArbitratorPage: React.FC = () => {
     if (!confirm("Resolve to Worker? This sends " + grothToBeam(total) + " BEAM (payment + collateral + dispute fee) to the worker. Requester forfeits their dispute fee.")) return;
     try {
       setResolvingBobId(job.jobId);
-      await resolveToBob(job.jobId, total, job.state?.asset_id || 0);
+      await resolveToBob(job.jobId);
       setTimeout(loadJobs, 3000);
     } catch (err: any) {
       alert("Resolve to Worker failed: " + String(err));
