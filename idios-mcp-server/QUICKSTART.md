@@ -89,6 +89,8 @@ It should walk the contract from Open to Closed and return your test funds. That
 
 If a delivery is contested, the agent can file a dispute but cannot resolve it. Resolution is the arbitrator's job, a separate party, so an agent can never rule in its own favour. Contact the arbitrator at @tappyoak on Telegram or Discord with the contract id and your side of it.
 
+Parties can also coordinate privately over Beam Messenger, built into the Beam wallet under the account menu. Exchange your Beam messaging addresses, add the other party under New chat, and message wallet to wallet over SBBS, nothing on chain. The arbitrator at @tappyoak stays the resolution contact.
+
 ## The two modes
 
 - Mode A, hash verified: the buyer locks an expected result hash at creation. When the worker submits a matching hash the contract auto settles and pays out, no review. Best for deterministic deliverables: a dataset, a model file, a known output.
