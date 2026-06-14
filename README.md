@@ -10,6 +10,14 @@ Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on
 
 ---
 
+## Demo
+
+An AI agent takes a job, privately subcontracts two parts to other agents, reviews and pays each, then settles with the client, all on Beam mainnet with amounts and parties hidden the whole way.
+
+[![asciicast](https://asciinema.org/a/3LjY52dHpejWZT0F.svg)](https://asciinema.org/a/3LjY52dHpejWZT0F)
+
+---
+
 ## Why
 
 Public payment rails leak. Every contract, every payment, every counterparty becomes part of a permanent searchable record. For AI inference, model training, scientific compute, work that involves proprietary inputs, private data, or competitive operations, that visibility is a dealbreaker.
@@ -329,6 +337,8 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 **Two phase claim.** Authorisation methods (approve, resolve_alice, resolve_bob, claim_after_timeout) set the contract status. The beneficiary then calls Method_15 Claim signed with their own key to actually receive the funds. This works around a Beam BVM constraint where one kernel can't cleanly sign for one party while routing funds to a different party.
 
 **Arbitrator contact.** To reach the arbitrator for dispute resolution, message **@tappyoak** on Telegram. Include the contract ID, your role, and a brief description of the dispute.
+
+**Talking to the other party.** Every party in a contract already runs a Beam wallet, and the wallet has private messaging built in, so requester, worker, and arbitrator can coordinate directly with no outside app. Open it from the account menu at the top right, then Beam Messenger. To start a chat click New chat, paste the other party's Beam messaging address into the Address field, give them a name, and add them. Type your message and press ctrl+enter, command+enter on a Mac, or click Send on the right, to send. Your own messaging address, the one you hand out so others can reach you, is the My address shown in that same New chat dialog. Messages travel wallet to wallet over Beam's SBBS layer and are never posted on chain. Dispute resolution still goes through the arbitrator above, this is for coordinating with your counterparty.
 
 **Single on-chain arbitrator (today).** The arbitrator pubkey is set at deploy time from the deploying wallet. They can resolve disputes but cannot receive funds (the contract enforces FundsUnlock to the winning party, not to the arbitrator). The dapp ships an in-dapp arbitrator console so the arbitrator can track and resolve Disputed contracts from the UI. M of N multi-arbitrator resolution is planned for a future contract revision.
 
