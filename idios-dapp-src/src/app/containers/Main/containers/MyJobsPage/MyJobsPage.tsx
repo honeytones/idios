@@ -126,6 +126,7 @@ const TrackInput = styled.input`
 `;
 
 const TrackSelect = styled.select`
+  option { background: #1a1a1a; color: #e8e8e8; }
   padding: 10px 14px;
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.15);
@@ -333,6 +334,7 @@ const ModalInput = styled.input`
 `;
 
 const ModalSelect = styled.select`
+  option { background: #1a1a1a; color: #e8e8e8; }
   width: 100%;
   padding: 10px 14px;
   border-radius: 6px;
@@ -663,7 +665,7 @@ const MyJobsPage: React.FC = () => {
   };
 
   const handleRemove = (jobId: number) => {
-    if (!confirm('Stop tracking this job? Funds on chain are unaffected.')) return;
+    if (!confirm('Stop tracking this contract? Funds on chain are unaffected.')) return;
     removeTrackedJob(jobId);
     setJobs(prev => prev.filter(j => j.jobId !== jobId));
   };
@@ -748,8 +750,8 @@ const MyJobsPage: React.FC = () => {
             onChange={e => setTrackJobId(e.target.value)}
           />
           <TrackSelect value={trackRole} onChange={e => setTrackRole(e.target.value as 'requester' | 'worker')}>
-            <option value="worker">As Worker (Bob)</option>
-            <option value="requester">As Requester (Alice)</option>
+            <option value="worker">As Worker</option>
+            <option value="requester">As Requester</option>
           </TrackSelect>
           <TrackButton onClick={handleAddTrack} disabled={!trackJobId}>
             Add
@@ -757,7 +759,7 @@ const MyJobsPage: React.FC = () => {
         </TrackFormRow>
       </TrackForm>
 
-      {loading && jobs.length === 0 && <LoadingMsg>Loading jobs...</LoadingMsg>}
+      {loading && jobs.length === 0 && <LoadingMsg>Loading contracts...</LoadingMsg>}
 
       {!loading && jobs.length === 0 && (
         <EmptyState>
@@ -888,15 +890,15 @@ const MyJobsPage: React.FC = () => {
       {exportJob && (
         <ModalOverlay onClick={closeExportModal}>
           <ModalContent onClick={(e: any) => e.stopPropagation()}>
-            <ModalTitle>Automate Job #{exportJob.jobId}</ModalTitle>
+            <ModalTitle>Automate Contract #{exportJob.jobId}</ModalTitle>
             <ModalScroll>
             <ModalSubtitle>
               The Idios agent daemon is a small Python program you run on your own computer that watches this
-              job's status on chain and fires the right actions automatically (commit, submit_delivery,
+              contract's status on chain and fires the right actions automatically (commit, submit_delivery,
               approve, claim, refund, resolve). One-time setup, then walk away.
             </ModalSubtitle>
             <ModalNote>
-              You're tracked as <strong>{exportJob.role}</strong> on this job. Pick the role you want the daemon
+              You're tracked as <strong>{exportJob.role}</strong> on this contract. Pick the role you want the daemon
               to play below, fill in the relevant hash, and copy the generated snippet into the <code>jobs</code>
               array of your daemon's <code>config.json</code>. Then start (or restart) your daemon.
               {' '}
@@ -906,8 +908,8 @@ const MyJobsPage: React.FC = () => {
             </ModalNote>
             <ModalLabel>Role for daemon</ModalLabel>
             <ModalSelect value={exportRole} onChange={e => setExportRole(e.target.value as 'worker' | 'requester')}>
-              <option value="worker">Worker (Bob) - commit, submit, claim</option>
-              <option value="requester">Requester (Alice) - approve, refund, claim</option>
+              <option value="worker">Worker - commit, submit, claim</option>
+              <option value="requester">Requester - approve, refund, claim</option>
             </ModalSelect>
             <ModalLabel>
               {exportRole === 'requester'

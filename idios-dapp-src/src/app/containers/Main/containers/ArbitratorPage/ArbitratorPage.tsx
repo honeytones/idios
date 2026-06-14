@@ -331,7 +331,7 @@ const ArbitratorPage: React.FC = () => {
 
       <Title>Arbitrator Console</Title>
       <Subtitle>
-        Track disputed jobs you have been notified about and resolve them.
+        Track disputed contracts you have been notified about and resolve them.
         Resolve actions only succeed if your wallet is configured as the contract arbitrator.
       </Subtitle>
 
@@ -353,7 +353,7 @@ const ArbitratorPage: React.FC = () => {
         </TrackFormRow>
       </TrackForm>
 
-      {loading && jobs.length === 0 && <LoadingMsg>Loading jobs...</LoadingMsg>}
+      {loading && jobs.length === 0 && <LoadingMsg>Loading contracts...</LoadingMsg>}
 
       {!loading && jobs.length === 0 && (
         <EmptyState>
@@ -364,7 +364,7 @@ const ArbitratorPage: React.FC = () => {
       {jobs.map(job => (
         <JobCard key={job.jobId}>
           <JobHeader>
-            <JobIdLabel>Job #{job.jobId}</JobIdLabel>
+            <JobIdLabel>Contract #{job.jobId}</JobIdLabel>
             <StatusBadge>
               {job.loading ? "Loading..." : job.error ? "Error" : statusToText(job.state?.status)}
             </StatusBadge>

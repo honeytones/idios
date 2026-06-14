@@ -440,7 +440,7 @@ const MainPage: React.FC = () => {
 
       const paymentGroth = beamToGroth(payment);
 
-      setStatus('Creating job, please approve in your Beam wallet.');
+      setStatus('Creating contract, please approve in your Beam wallet.');
       if (settlement === 'fast') {
         await createJobModeA(
           parseInt(jobId),
@@ -496,7 +496,7 @@ const MainPage: React.FC = () => {
     try {
       const result = await viewJob(parseInt(viewJobId));
       if (!result || (typeof result === 'object' && Object.keys(result).length === 0)) {
-        throw new Error('Job not found');
+        throw new Error('Contract not found');
       }
       setJobInfo(result);
     } catch (err: any) {
