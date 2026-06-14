@@ -362,7 +362,7 @@ Supports all three Idios roles:
 - **Client** (Alice / requester): hash-match auto-approve, claim on dispute won or refund.
 - **Arbitrator**: hash-match auto-resolve in Mode B disputes (`resolve_bob` on match, `resolve_alice` on mismatch).
 
-Tested end to end on Beam mainnet against the live v3 contract. Three test artifacts on chain demonstrate each role: contracts 22227 (Mode A worker), 22228 (Mode B worker + client), 22229 (Mode B arbitrator resolving a malicious dispute).
+The daemon automates all three roles and has been exercised end to end on Beam mainnet, including the dispute and arbitrator timeout recovery paths.
 
 The dapp's My Contracts page has an **Automate this contract** button on each tracked contract card that generates a daemon config snippet you can paste straight into the daemon's config. See [`idios-agent-daemon/README.md`](./idios-agent-daemon/README.md) for setup and configuration.
 
@@ -370,14 +370,21 @@ The dapp's My Contracts page has an **Automate this contract** button on each tr
 
 ## Roadmap
 
-This roadmap is partner-driven. Phase 1 is the next planned release. Everything after depends on real-world demand.
+This roadmap is partner-driven. Phase 0 is live on mainnet. Phase 1 is the next planned release. Everything after depends on real-world demand.
+
+**Phase 0 (shipped): live on mainnet**
+
+- [x] v5 contract on Beam mainnet, dapp v3.2.0, both Hash-verified (Mode A) and Reviewed (Mode B) settlement
+- [x] Four Mode B resolution paths verified end to end on mainnet: approve, dispute to either side, review timeout, arbitrator timeout void
+- [x] Worker collateral floor, mutual cancel, and review window fallback (the v5 surgical set)
+- [x] BEAM and NPH (Nephrite USD-pegged stablecoin) payment support
+- [x] Explorer parser, arbitrator console, agent runtime daemon (worker, requester, arbitrator), and in-dapp daemon config export
 
 **Phase 1 (next): Multi-arbitrator dispute resolution**
 
-- [ ] Per-contract arbitrator set (up to 5 pubkeys, M of N threshold) in v4 contract
+- [ ] Per-contract arbitrator set (up to 5 pubkeys, M of N threshold)
 - [ ] New sig_count and sig_indices args on resolve_alice and resolve_bob
 - [ ] Default fallback to contract-level arbitrator for backward compatibility
-- [ ] v4 contract deployed on Beam mainnet alongside v3 (jobs in flight on v3 continue on v3)
 - [ ] Dapp UI for arbitrator config in Start a Contract flow plus co-signing in arbitrator console
 
 **Phase 2: Payload delivery and asset diversity**
@@ -385,7 +392,7 @@ This roadmap is partner-driven. Phase 1 is the next planned release. Everything 
 - [ ] Contract specifications and deliverables sent via IPFS through Beam's private IPFS network
 - [ ] Encrypted payloads with keys exchanged out of band
 - [ ] Larger work files supported beyond what fits in a hash
-- [x] Confidential asset support: BEAM and NPH (Nephrite USD-pegged stablecoin) shipped in v3.1.x
+- [ ] Additional confidential assets
 
 **Phase 3+: Future research (partner-driven)**
 
