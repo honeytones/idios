@@ -58,7 +58,7 @@ Copy `idios_mcp_config.example.json` to `idios_mcp_config.json` and fill in five
       "shader_app_file": "/path/to/idios_app.wasm",
       "wallet_path": "/path/to/wallet.db",
       "node_addr": "eu-node01.mainnet.beam.mw:8100",
-      "cid": "f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255"
+      "cid": "41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f"
     }
 
 The cid is the live Idios contract on Beam mainnet.
