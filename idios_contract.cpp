@@ -1,6 +1,7 @@
 #include "Shaders/common.h"
 #include "Shaders/Math.h"
 #include "idios_contract.h"
+#include "Shaders/upgradable3/contract_impl.h" // provides Method_2 (Upgradable3 control) + Settings impl
 
 // KeyJob and KeyParams now live in idios_contract.h inside its packed region
 // (v5 KeyJob padding fix): both the contract and the app shader serialize the
@@ -40,7 +41,12 @@ static bool JobIdInUse(uint64_t job_id) {
     return n > 0;
 }
 
-BEAM_EXPORT void Ctor(const Idios::Params& params) {
+BEAM_EXPORT void Ctor(const Idios::Create& r) {
+    // Upgradable3: validate and persist the admin settings first (amm pattern).
+    r.m_Upgradable.TestNumApprovers();
+    r.m_Upgradable.Save();
+
+    const Idios::Params& params = r.m_Params;
     Env::Halt_if(Env::Memis0(&params.arbitrator_pk, sizeof(params.arbitrator_pk)));
     Env::Halt_if(Env::Memis0(&params.treasury_pk, sizeof(params.treasury_pk)));
     Env::Halt_if(params.default_review_window == 0);
@@ -51,7 +57,7 @@ BEAM_EXPORT void Ctor(const Idios::Params& params) {
 
 BEAM_EXPORT void Dtor(void*) {}
 
-BEAM_EXPORT void Method_2(const Idios::CreateModeA& args) {
+BEAM_EXPORT void Method_4(const Idios::CreateModeA& args) {
     Env::Halt_if(args.payment == 0);
     Env::Halt_if(Env::Memis0(&args.node_pk, sizeof(args.node_pk)));
     Env::Halt_if(Env::Memis0(&args.requester_pk, sizeof(args.requester_pk)));
@@ -99,7 +105,8 @@ BEAM_EXPORT void Method_3(const Idios::Commit& args) {
     SaveJob(job);
 }
 
-BEAM_EXPORT void Method_4(void*) { Env::Halt(); }
+// Method_2 is the Upgradable3 control dispatch, provided by the included
+// upgradable3/contract_impl.h. Method_4 is now CreateModeA (above).
 BEAM_EXPORT void Method_5(void*) { Env::Halt(); }
 
 BEAM_EXPORT void Method_6(const Idios::Refund& args) {
@@ -376,4 +383,26 @@ BEAM_EXPORT void Method_20(const Idios::MutualCancel& args) {
     Env::FundsUnlock(job.asset_id, job.payment + job.collateral);
     job.status = Idios::JobStatus::Cancelled;
     SaveJob(job);
+}
+
+// ---------------------------------------------------------------------------
+// Upgradable3 version callbacks. g_CurrentVersion starts at 0 for this first
+// upgradable deploy and is bumped by hand on each in place upgrade. OnUpgraded
+// enforces that an upgrade steps the version by exactly one; at version 0 there
+// is no prior version to upgrade from, so it halts.
+// ---------------------------------------------------------------------------
+namespace Upgradable3 {
+
+    static const uint32_t g_CurrentVersion = 0;
+
+    uint32_t get_CurrentVersion() {
+        return g_CurrentVersion;
+    }
+
+    void OnUpgraded(uint32_t nPrevVersion) {
+        if constexpr (g_CurrentVersion)
+            Env::Halt_if(nPrevVersion != g_CurrentVersion - 1);
+        else
+            Env::Halt();
+    }
 }

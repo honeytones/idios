@@ -1,6 +1,7 @@
 #include "Shaders/common.h"
 #include "Shaders/app_common_impl.h"
 #include "idios_contract.h"
+#include "Shaders/upgradable3/app_common_impl.h" // Upgradable3 manager driver (schedule/explicit upgrade)
 
 using Action_func_t = void (*)(const ContractID&);
 
@@ -52,14 +53,21 @@ struct TreasuryKeyID {
     uint8_t m_Ctx = 1;
 };
 
+struct AdminKeyID {
+    uint8_t m_Tag = 'M'; // manager/admin key for Upgradable3, wallet fixed like 'A' and 'T'
+    uint8_t m_Ctx = 1;
+};
+
 // ----------------------------------------------------------------
 //  Manager actions (deploy, view)
 // ----------------------------------------------------------------
 
 void On_manager_deploy(const ContractID& unused)
 {
-    Idios::Params params;
-    Env::Memset(&params, 0, sizeof(params));
+    Idios::Create create;
+    Env::Memset(&create, 0, sizeof(create));
+
+    Idios::Params& params = create.m_Params;
 
     ArbitratorKeyID kid;
     Env::DerivePk(params.arbitrator_pk, &kid, sizeof(kid));
@@ -74,8 +82,18 @@ void On_manager_deploy(const ContractID& unused)
     params.default_review_window = review_window;
     params.arbitrator_timeout_blocks = arbitrator_timeout;
 
-    Env::GenerateKernel(nullptr, 0, &params, sizeof(params),
-        nullptr, 0, nullptr, 0, "Deploy Idios v2 contract", 0);
+    // Upgradable3 admin settings. Admin key is wallet fixed (derived from the
+    // deploying CLI wallet), single approver, one day upgrade timelock by
+    // default. Pass a small upgrade_delay for the throwaway test cid.
+    AdminKeyID akid;
+    Env::DerivePk(create.m_Upgradable.m_pAdmin[0], &akid, sizeof(akid));
+    create.m_Upgradable.m_MinApprovers = 1;
+    uint64_t upgrade_delay = 1440;
+    Env::DocGetNum64("upgrade_delay", &upgrade_delay);
+    create.m_Upgradable.m_hMinUpgradeDelay = upgrade_delay;
+
+    Env::GenerateKernel(nullptr, 0, &create, sizeof(create),
+        nullptr, 0, nullptr, 0, "Deploy Idios contract (Upgradable3)", 200000);
 }
 
 void On_manager_view(const ContractID& cid)
@@ -92,6 +110,60 @@ void On_manager_view(const ContractID& cid)
     Env::DocAddBlob_T("treasury_pk", params.treasury_pk);
     Env::DocAddNum64("default_review_window", params.default_review_window);
     Env::DocAddNum64("arbitrator_timeout_blocks", params.arbitrator_timeout_blocks);
+}
+
+// ----------------------------------------------------------------
+//  Manager actions: Upgradable3 upgrade drivers
+// ----------------------------------------------------------------
+//
+// schedule_upgrade: admin schedules an in place upgrade. The new contract
+// bytecode is fed via --shader_contract_file (the wallet exposes it as the
+// "contract.shader" blob). We build the ScheduleUpgrade control arg by hand and
+// sign with the admin key using the standard single signer path, NOT the SDK
+// multisig ritual, which relies on interactive nonce slots unavailable in a one
+// shot CLI shader call (it failed in get_BlindSk). For a solo admin a single
+// signature satisfies the contract's TestAdminSigs with mask 1.
+//
+// explicit_upgrade: permissionless trigger once the target height passes.
+//
+void On_manager_schedule_upgrade(const ContractID& cid)
+{
+    using SU = Upgradable3::Method::Control::ScheduleUpgrade;
+
+    Upgradable3::Manager::SettingsPlus stg;
+    if (!stg.Read(cid)) return On_error("upgradable settings not found");
+
+    uint32_t nShaderSize = Env::DocGetBlob("contract.shader", nullptr, 0);
+    if (!nShaderSize) return On_error("contract.shader not provided");
+
+    uint32_t nArg = sizeof(SU) + nShaderSize;
+    SU* pArg = (SU*) Env::Heap_Alloc(nArg);
+    pArg->m_Type = SU::s_Type;
+    pArg->m_ApproveMask = 1; // solo admin, bit 0
+    pArg->m_SizeShader = nShaderSize;
+    pArg->m_Next.m_hTarget = Env::get_Height() + stg.m_hMinUpgradeDelay + 10;
+    Env::DocGetBlob("contract.shader", pArg + 1, nShaderSize);
+
+    AdminKeyID akid;
+    Env::KeyID adminKid(&akid, sizeof(akid));
+
+    uint32_t charge =
+        Env::Cost::CallFar +
+        Env::Cost::LoadVar_For(sizeof(Upgradable3::Settings)) +
+        Env::Cost::AddSig +
+        Env::Cost::SaveVar_For(nShaderSize + sizeof(Upgradable3::NextVersion)) +
+        Env::Cost::Cycle * 500;
+
+    Env::GenerateKernel(&cid, Upgradable3::Method::Control::s_iMethod,
+        pArg, nArg, nullptr, 0, &adminKid, 1,
+        "Idios: schedule upgrade", charge);
+
+    Env::Heap_Free(pArg);
+}
+
+void On_manager_explicit_upgrade(const ContractID& cid)
+{
+    Upgradable3::Manager::MultiSigRitual::Perform_ExplicitUpgrade(cid);
 }
 
 // ----------------------------------------------------------------
@@ -868,6 +940,8 @@ BEAM_EXPORT void Method_1()
         {"create",   On_manager_deploy},
         {"view",     On_manager_view},
         {"view_job", On_user_view_job},
+        {"schedule_upgrade", On_manager_schedule_upgrade},
+        {"explicit_upgrade", On_manager_explicit_upgrade},
     };
     static const ActionEntry USER_ACTIONS[] = {
         {"create_a",            On_user_create_a},
