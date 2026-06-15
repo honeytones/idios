@@ -4,7 +4,7 @@
 
 Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on-chain dispute resolution. No public record of amounts or parties.
 
-**[Website](https://honeytones.github.io/idios-site/)** · **[AI and compute use cases](https://honeytones.github.io/idios-site/private-ai-escrow.html)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255)**
+**[Website](https://honeytones.github.io/idios-site/)** · **[AI and compute use cases](https://honeytones.github.io/idios-site/private-ai-escrow.html)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f)**
 
 > "Pay privately. Verify on chain. Dispute when needed."
 
@@ -68,7 +68,7 @@ Idios uses a two phase claim pattern. Authorisation methods (approve, resolve_al
 
 **Live on Beam mainnet** ✅
 
-- v5 contract deployed at block 3901551 (June 13, 2026)
+- v6 contract (Upgradable3, in place upgrades) deployed at block 3905992 (June 15, 2026)
 - Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds
 - Dapp 3.1.8 published, supports both modes via UI
 
@@ -88,10 +88,10 @@ Idios uses a two phase claim pattern. Authorisation methods (approve, resolve_al
 ## Contract
 
 ```
-CID: f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255
+CID: 41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f
 Deployed at block: 3898709
 Constructor params: default_review_window=10080, arbitrator_timeout_blocks=20160
-Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255
+Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f
 ```
 
 ### Roles
@@ -185,7 +185,7 @@ The Beam CLI wallet drives the contract directly. Useful for scripting, building
 - A copy of `idios_app.wasm` (downloadable from this repo or built from source, see [Build](#build))
 - A Beam mainnet node to connect to. Run your own, or use a public node like `eu-node01.mainnet.beam.mw:8100`.
 
-All examples use the v5 production contract `cid=f9751785...` and a public node. Substitute your own as needed.
+All examples use the v6 production contract `cid=41ef8be5...` and a public node. Substitute your own as needed.
 
 ### Get worker pubkey for this contract
 
@@ -194,7 +194,7 @@ The worker's pubkey is contract-specific (because the CID is part of the key der
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=get_key,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255" \
+  --shader_args="role=user,action=get_key,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -205,7 +205,7 @@ The output is the worker's `node_pk` for that contract. Send this to the request
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=view_job,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>" \
+  --shader_args="role=user,action=view_job,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -214,7 +214,7 @@ The output is the worker's `node_pk` for that contract. Send this to the request
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=create_a,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,payment=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>,result_hash=<HASH>" \
+  --shader_args="role=user,action=create_a,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,payment=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>,result_hash=<HASH>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -225,7 +225,7 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=create_b,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,review_window_blocks=<N>,payment=<GROTH>,dispute_fee=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>" \
+  --shader_args="role=user,action=create_b,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,subnet_id=1,epoch=1,expiry_block=<FUTURE>,review_window_blocks=<N>,payment=<GROTH>,dispute_fee=<GROTH>,asset_id=0,node_pk=<WORKER_PUBKEY>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -234,7 +234,7 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=commit,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=commit,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,collateral=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -243,7 +243,7 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=submit_delivery,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>,delivery_hash=<HASH>,mode=<65|66>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=submit_delivery,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,delivery_hash=<HASH>,mode=<65|66>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -254,17 +254,17 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 # Requester approves
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=approve,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>" \
+  --shader_args="role=user,action=approve,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 
 # Requester disputes
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=dispute,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>,dispute_fee=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=dispute,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,dispute_fee=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 
 # Worker claims after review window expires
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=claim_after_timeout,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>" \
+  --shader_args="role=user,action=claim_after_timeout,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -275,12 +275,12 @@ The arbitrator wallet is the one that originally deployed the contract.
 ```bash
 # Resolve in favour of requester
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=arbitrator,action=resolve_alice,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>" \
+  --shader_args="role=arbitrator,action=resolve_alice,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 
 # Resolve in favour of worker
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=arbitrator,action=resolve_bob,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>" \
+  --shader_args="role=arbitrator,action=resolve_bob,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -290,7 +290,7 @@ After Settled, ResolvedToBob, or ResolvedToAlice, the beneficiary calls `claim`.
 
 ```bash
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=claim,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>,total=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=claim,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,total=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -300,7 +300,7 @@ For an Open contract whose `expiry_block` has passed without anyone committing.
 
 ```bash
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=refund,cid=f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255,job_id=<N>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=refund,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -374,7 +374,7 @@ This roadmap is partner-driven. Phase 0 is live on mainnet. Phase 1 is the next 
 
 **Phase 0 (shipped): live on mainnet**
 
-- [x] v5 contract on Beam mainnet, dapp v3.2.0, both Hash-verified (Mode A) and Reviewed (Mode B) settlement
+- [x] v6 contract on Beam mainnet, dapp v3.3.0, both Hash-verified (Mode A) and Reviewed (Mode B) settlement
 - [x] Four Mode B resolution paths verified end to end on mainnet: approve, dispute to either side, review timeout, arbitrator timeout void
 - [x] Worker collateral floor, mutual cancel, and review window fallback (the v5 surgical set)
 - [x] BEAM and NPH (Nephrite USD-pegged stablecoin) payment support
