@@ -289,19 +289,16 @@ class Chain:
         # still counts toward N until fully exited (can still vote on disputes
         # it was eligible for), so n_registered is unchanged here.
 
-    def _bonded(self, arb_id):
-        a = self.arbs.get(arb_id)
-        for job in self.jobs.values():
-            if job.status == DISPUTED and a is not None and a.registered_at <= job.dispute_filed:
-                return True
-        return False
-
     def reclaim_stake(self, arb_id):
         a = self.arbs.get(arb_id)
         if a is None: raise Halt
         if a.state != A_DEREG: raise Halt
         if self.height <= a.dereg_block + self.stake_cooldown: raise Halt
-        if self._bonded(arb_id): raise Halt
+        # No "still bonded to an open dispute" gate. The contract cannot scan
+        # jobs (no enumeration), and with no slash the bond is never at risk
+        # mid dispute, so reclaiming early only removes a voter, which is safe:
+        # the dispute resolves on the rest or times out to void. A reclaimed
+        # arb keeps any reward it already earned (reward keys off the vote).
         self.unlock(("arb", arb_id), a.stake)        # full bond back, never slashed
         a.stake = 0
         a.state = A_GONE
