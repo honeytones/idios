@@ -622,6 +622,87 @@ def fuzz_mofn_scenario(seed, counters):
         assert locked == unlocked == stakes[aid], (seed, "bond not drained", aid)
 
 
+def fuzz_eligibility_attack(seed, counters):
+    """The classic on-chain quorum hole: after a dispute is filed and its N and
+    M are frozen, an attacker registers a flood of new arbitrators and tries to
+    vote them. Assert that none of the post-dispute registrations can vote on
+    that dispute, that the frozen N and M do not move when the registry grows,
+    that the flood cannot touch the tally, and that the legitimate pre-dispute
+    set still resolves. The registered_at <= dispute_filed gate is what closes
+    this; this scenario is its regression test."""
+    rng = random.Random(seed)
+    chain = Chain(arbitrator_timeout=rng.choice([20, 50, 100]),
+                  default_review_window=rng.choice([5, 50]),
+                  stake_cooldown=rng.choice([1, 5, 20]))
+    amounts = [1, 2, 100, 100000]
+
+    # honest arbitrators, all registered before the dispute
+    k = rng.randint(1, 5)
+    pre = list(range(101, 101 + k))
+    stakes = {}
+    for aid in pre:
+        s = rng.choice(amounts)
+        chain.register(aid, s)
+        stakes[aid] = s
+
+    jid = 1
+    payment = rng.choice(amounts)
+    fee = rng.choice(amounts)
+    chain.create_b(jid, payment, fee, chain.height + 300, rng.choice([0, 5, 10]))
+    chain.commit(jid, rng.choice(amounts))
+    chain.submit_delivery(jid, rng.choice([7, 9]))
+    chain.dispute(jid)
+    job = chain.jobs[jid]
+    frozen_n, M = job.frozen_n, job.threshold
+    assert frozen_n == k and M == (k // 2) + 1, (seed, "wrong freeze", frozen_n, M, k)
+
+    # advance so the flood registrations are unambiguously after the dispute
+    chain.height += rng.choice([1, 2, 5])
+
+    # the attack: flood the registry with new arbitrators
+    flood = list(range(201, 201 + rng.randint(1, 8)))
+    fstakes = {}
+    for aid in flood:
+        s = rng.choice(amounts)
+        chain.register(aid, s)
+        fstakes[aid] = s
+
+    # the global counter grew, but this dispute's frozen N and M must not move
+    assert job.frozen_n == frozen_n and job.threshold == M, (seed, "freeze moved under flood")
+    assert chain.n_registered == k + len(flood), (seed, "counter wrong")
+
+    # every flooded arbitrator is barred from voting on the already-filed dispute
+    for aid in flood:
+        try:
+            chain.vote(aid, jid, rng.choice([ALICE, BOB]))
+            raise AssertionError((seed, "post-dispute registration voted", aid))
+        except Halt:
+            pass
+
+    # and the flood could not touch the tally
+    assert job.vc_alice == 0 and job.vc_bob == 0, (seed, "flood moved the tally")
+    counters["floods_blocked"] += len(flood)
+
+    # the legitimate pre-dispute set still reaches quorum (k >= M always)
+    rng.shuffle(pre)
+    win = rng.choice([ALICE, BOB])
+    for aid in pre[:M]:
+        chain.vote(aid, jid, win)
+    assert job.resolution is not None, (seed, "legit quorum failed after flood")
+    counters["resolved_after_flood"] += 1
+
+    # everything drains; flood bonds reclaim in full, never having voted
+    stuck = drain_everything(chain)
+    if stuck:
+        raise AssertionError("ELIGIBILITY LIVENESS VIOLATED seed %s: %s" % (seed, stuck))
+    for aid in pre:
+        locked, unlocked = chain.ledger[("arb", aid)]
+        assert locked == unlocked == stakes[aid], (seed, "pre bond not drained", aid)
+    for aid in flood:
+        locked, unlocked = chain.ledger[("arb", aid)]
+        assert locked == unlocked == fstakes[aid], (seed, "flood bond not drained", aid)
+
+
 def chain_committed(chain, job):
     # collateral that was locked for this job (commit happened in scenario)
     locked, _ = chain.ledger[job.job_id]
@@ -652,6 +733,13 @@ def main():
           "consensus voters paid %d, split-to-void %d. conservation and liveness held."
           % (n_seq, counters["resolved_alice"], counters["resolved_bob"],
              counters["consensus_voters"], counters["split"]))
+
+    elig = {"floods_blocked": 0, "resolved_after_flood": 0}
+    for i in range(n_seq):
+        fuzz_eligibility_attack(base + i, elig)
+    print("Eligibility attack scenarios: %d, post-dispute registrations blocked from voting %d, "
+          "disputes still resolved by the frozen set %d. frozen N and M never moved."
+          % (n_seq, elig["floods_blocked"], elig["resolved_after_flood"]))
 
 
 if __name__ == "__main__":
