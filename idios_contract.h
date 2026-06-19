@@ -4,19 +4,23 @@
 
 namespace Idios {
 
-    static const ShaderID s_SID = {0x16,0xda,0xcc,0xe9,0x67,0x44,0x94,0xa3,0x06,0x1b,0xc7,0xf4,0x10,0x44,0x49,0xaa,0x6a,0x7e,0x98,0x10,0xe3,0x92,0xba,0x19,0xc9,0x23,0xc2,0x6e,0x08,0xa8,0xe0,0xb7};
+    static const ShaderID s_SID = {0x0b,0x87,0xc6,0x1b,0x3b,0x16,0x14,0x72,0x3a,0xc0,0x86,0xaf,0x36,0x56,0x95,0xd1,0x86,0x52,0x99,0x94,0xa4,0x81,0x3a,0xdb,0xec,0x99,0xc0,0x2e,0xeb,0xd7,0x9d,0x19};
 
 #pragma pack (push, 1)
 
 struct Tags {
-    static const uint8_t s_Job    = 0;
-    static const uint8_t s_Params = 1;
+    static const uint8_t s_Job      = 0;
+    static const uint8_t s_Params   = 1;
+    // M of N (v1) additions. New namespaces only; the two above are unchanged
+    // so existing Job and Params storage is read back identically.
+    static const uint8_t s_Dispute  = 2; // per disputed job: frozen N/M, tallies, resolution
+    static const uint8_t s_Arb      = 3; // per arbitrator: bond and registry state
+    static const uint8_t s_Vote      = 4; // per (job, arbitrator): the cast vote
+    static const uint8_t s_RegCount = 5; // single counter: live registered bonds (N)
 };
 
 // Key structs live inside the packed region so the contract and the app
-// shader serialize identical, deterministic key bytes (9 bytes, no padding).
-// This is the v5 fix for the KeyJob padding issue: the old out-of-header
-// definitions had 7 indeterminate padding bytes between prefix and job_id.
+// shader serialize identical, deterministic key bytes (no padding).
 struct KeyJob {
     uint8_t  prefix = Tags::s_Job;
     uint64_t job_id;
@@ -24,6 +28,26 @@ struct KeyJob {
 
 struct KeyParams {
     uint8_t prefix = Tags::s_Params;
+};
+
+struct KeyDispute {
+    uint8_t  prefix = Tags::s_Dispute;
+    uint64_t job_id;
+};
+
+struct KeyArb {
+    uint8_t prefix = Tags::s_Arb;
+    PubKey  arb_pk;
+};
+
+struct KeyVote {
+    uint8_t  prefix = Tags::s_Vote;
+    uint64_t job_id;
+    PubKey   arb_pk;
+};
+
+struct KeyRegCount {
+    uint8_t prefix = Tags::s_RegCount;
 };
 
 enum JobStatus : uint8_t {
@@ -36,7 +60,7 @@ enum JobStatus : uint8_t {
     ResolvedToAlice   = 6,
     ResolvedToBob     = 7,
     Closed            = 8,
-    Voided            = 9,   // dispute abandoned by arbitrator (timed out)
+    Voided            = 9,   // dispute abandoned (timed out, or never reached quorum)
     Cancelled         = 10,  // mutual cancel: both signed, everyone made whole
 };
 
@@ -45,6 +69,8 @@ enum JobMode : uint8_t {
     ModeB = 'B',
 };
 
+// UNCHANGED from v6. Byte identical layout so existing jobs survive the
+// in place upgrade. All M of N per job state lives in DisputeState, not here.
 struct Job {
     PubKey    requester_pk;
     PubKey    node_pk;
@@ -62,11 +88,16 @@ struct Job {
     Height    dispute_filed_block;
     uint8_t   result_hash[32];
     uint8_t   delivery_hash[32];
-    uint8_t   spec_hash[32];         // v5: hash of the agreed work spec, stored only
+    uint8_t   spec_hash[32];
     uint8_t   mode;
     JobStatus status;
 };
 
+// UNCHANGED from v6. Byte identical so the stored params survive the upgrade.
+// Note: arbitrator_pk is the v0 single arbitrator key, retained only so that
+// in flight v0 disputes are not orphaned by the struct; v1 resolves by quorum
+// and does not read it. arbitrator_timeout_blocks doubles as the bond reclaim
+// cooldown in v1 (no new param, no Ctor change).
 struct Params {
     PubKey arbitrator_pk;
     PubKey treasury_pk;
@@ -82,6 +113,45 @@ struct Create {
     Upgradable3::Settings m_Upgradable;
     Params                m_Params;
 };
+
+// ---- M of N (v1) records -------------------------------------------------
+
+// resolution: 0 = none, 1 = Alice, 2 = Bob. Created at Dispute, finalised at
+// the Mth matching vote. The whole dispute_fee leaves as threshold shares of
+// fee_share plus the single fee_remainder swept to treasury.
+struct DisputeState {
+    uint64_t frozen_n;       // live registry size N, frozen at dispute time
+    uint32_t threshold;      // M = N/2 + 1 (1 if N == 0)
+    uint32_t vc_alice;       // running tally, side Alice
+    uint32_t vc_bob;         // running tally, side Bob
+    Amount   fee_share;      // dispute_fee / M, set at resolution
+    Amount   fee_remainder;  // dispute_fee % M, swept to treasury
+    uint8_t  resolution;     // 0 none, 1 Alice, 2 Bob
+    uint8_t  winner_paid;    // P + C claimed by the winner
+    uint8_t  remainder_swept;// fee_remainder taken by treasury
+};
+
+// state: 0 = registered, 1 = deregistering, 2 = gone. The bond is pure sybil
+// resistance in v1, never slashed; reclaimed in full after the cooldown.
+struct ArbRec {
+    Amount  stake;
+    AssetID asset_id;
+    Height  registered_at;   // only arbs registered before a dispute may vote on it
+    Height  dereg_block;
+    uint8_t state;
+};
+
+// side: 0 = Alice, 1 = Bob. One immutable record per (job, arbitrator).
+struct VoteRec {
+    uint8_t side;
+    uint8_t claimed;         // reward share taken (consensus voters only)
+};
+
+struct RegCount {
+    uint64_t n;
+};
+
+// ---- method argument structs ---------------------------------------------
 
 struct CreateModeA {
     static const uint32_t s_iMethod = 4; // was 2; moved to free Method 2 for Upgradable3 control
@@ -142,6 +212,9 @@ struct Dispute {
     uint64_t  job_id;
 };
 
+// RETIRED in v1: single arbitrator resolve. Kept as a struct for ABI/method
+// numbering only; Method_12 and Method_13 are Halt stubs now. Disputes resolve
+// by quorum (Vote, Method_24).
 struct ResolveToAlice {
     static const uint32_t s_iMethod = 12;
     uint64_t  job_id;
@@ -184,6 +257,38 @@ struct TreasurySweep {
 struct MutualCancel {
     static const uint32_t s_iMethod = 20;
     uint64_t  job_id;
+};
+
+// ---- M of N (v1) methods --------------------------------------------------
+
+struct Register {
+    static const uint32_t s_iMethod = 21;
+    PubKey   arb_pk;
+    Amount   stake;
+    AssetID  asset_id;
+};
+
+struct Deregister {
+    static const uint32_t s_iMethod = 22;
+    PubKey   arb_pk;
+};
+
+struct ReclaimStake {
+    static const uint32_t s_iMethod = 23;
+    PubKey   arb_pk;
+};
+
+struct Vote {
+    static const uint32_t s_iMethod = 24;
+    uint64_t job_id;
+    PubKey   arb_pk;
+    uint8_t  side;          // 0 = Alice, 1 = Bob
+};
+
+struct ClaimArbReward {
+    static const uint32_t s_iMethod = 25;
+    uint64_t job_id;
+    PubKey   arb_pk;
 };
 
 struct View {

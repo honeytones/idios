@@ -58,6 +58,16 @@ struct AdminKeyID {
     uint8_t m_Ctx = 1;
 };
 
+// M of N arbitrator key. Wallet fixed like 'A'/'T'/'M', but parameterized by
+// an index so a single wallet can hold several distinct arbitrator identities
+// (needed to drive a 2 of 3 from one wallet in testing). Separate wallets can
+// all use index 0 and still derive distinct keys, since DerivePk is per wallet.
+struct MofnArbKeyID {
+    uint8_t  m_Tag = 'N';
+    uint8_t  m_Ctx = 1;
+    uint32_t m_Idx = 0;
+};
+
 // ----------------------------------------------------------------
 //  Manager actions (deploy, view)
 // ----------------------------------------------------------------
@@ -112,20 +122,21 @@ void On_manager_view(const ContractID& cid)
     Env::DocAddNum64("arbitrator_timeout_blocks", params.arbitrator_timeout_blocks);
 }
 
+// Live registry size N (the value frozen onto a dispute as its quorum base).
+void On_manager_view_regcount(const ContractID& cid)
+{
+    Idios::RegCount rc;
+    rc.n = 0;
+    Env::Key_T<Idios::KeyRegCount> k;
+    k.m_Prefix.m_Cid = cid;
+    Env::VarReader::Read_T(k, rc); // absent => 0
+    Env::DocGroup gr("regcount");
+    Env::DocAddNum64("n_registered", rc.n);
+}
+
 // ----------------------------------------------------------------
 //  Manager actions: Upgradable3 upgrade drivers
 // ----------------------------------------------------------------
-//
-// schedule_upgrade: admin schedules an in place upgrade. The new contract
-// bytecode is fed via --shader_contract_file (the wallet exposes it as the
-// "contract.shader" blob). We build the ScheduleUpgrade control arg by hand and
-// sign with the admin key using the standard single signer path, NOT the SDK
-// multisig ritual, which relies on interactive nonce slots unavailable in a one
-// shot CLI shader call (it failed in get_BlindSk). For a solo admin a single
-// signature satisfies the contract's TestAdminSigs with mask 1.
-//
-// explicit_upgrade: permissionless trigger once the target height passes.
-//
 void On_manager_schedule_upgrade(const ContractID& cid)
 {
     using SU = Upgradable3::Method::Control::ScheduleUpgrade;
@@ -182,7 +193,6 @@ void On_user_create_a(const ContractID& cid)
     if (!Env::DocGetNum32("asset_id",     &args.asset_id))     return On_error("asset_id required");
     if (!Env::DocGetBlob("node_pk",       &args.node_pk, sizeof(PubKey))) return On_error("node_pk required");
     if (!Env::DocGetBlob("result_hash",   args.result_hash, 32))           return On_error("result_hash required");
-    // v5: optional. Default 0 (no collateral floor, no spec hash) if omitted.
     Env::DocGetNum64("required_collateral", &args.required_collateral);
     Env::DocGetBlob("spec_hash", args.spec_hash, 32);
 
@@ -214,13 +224,11 @@ void On_user_create_b(const ContractID& cid)
     if (!Env::DocGetNum64("subnet_id",            &args.subnet_id))            return On_error("subnet_id required");
     if (!Env::DocGetNum64("epoch",                &args.epoch))                return On_error("epoch required");
     if (!Env::DocGetNum64("expiry_block",         &args.expiry_block))         return On_error("expiry_block required");
-    // v5: review_window_blocks optional, 0 (or omitted) means use the contract default.
     Env::DocGetNum64("review_window_blocks", &args.review_window_blocks);
     if (!Env::DocGetNum64("payment",              &args.payment))              return On_error("payment required");
     if (!Env::DocGetNum64("dispute_fee",          &args.dispute_fee))          return On_error("dispute_fee required");
     if (!Env::DocGetNum32("asset_id",             &args.asset_id))             return On_error("asset_id required");
     if (!Env::DocGetBlob("node_pk",               &args.node_pk, sizeof(PubKey))) return On_error("node_pk required");
-    // v5: optional. Default 0 (no collateral floor, no spec hash) if omitted.
     Env::DocGetNum64("required_collateral", &args.required_collateral);
     Env::DocGetBlob("spec_hash", args.spec_hash, 32);
 
@@ -251,7 +259,6 @@ void On_user_commit(const ContractID& cid)
     if (!Env::DocGetNum64("job_id",     &args.job_id))     return On_error("job_id required");
     if (!Env::DocGetNum64("collateral", &args.collateral)) return On_error("collateral required");
 
-    // Load Job from chain to get asset_id (worker cannot mismatch asset)
     Idios::KeyJob key;
     key.job_id = args.job_id;
     Env::Key_T<Idios::KeyJob> k;
@@ -287,7 +294,6 @@ void On_user_submit_delivery(const ContractID& cid)
     if (!Env::DocGetNum64("job_id",        &args.job_id))                   return On_error("job_id required");
     if (!Env::DocGetBlob("delivery_hash",  args.delivery_hash, 32))         return On_error("delivery_hash required");
 
-    // Load Job from chain to get mode, payment, collateral, asset_id
     Idios::KeyJob key;
     key.job_id = args.job_id;
     Env::Key_T<Idios::KeyJob> k;
@@ -352,10 +358,12 @@ void On_user_claim(const ContractID& cid)
     if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
     if (job.mode == 'A') return On_error("Mode A jobs auto-settle, no claim needed");
 
+    // v1 M of N: the winner takes payment + collateral. The dispute_fee is no
+    // longer part of the winner's claim; it is the arbitration reward, claimed
+    // by the consensus voters (arbitrator claim_reward) with the remainder
+    // swept to treasury. This holds for Settled, ResolvedToAlice and
+    // ResolvedToBob alike.
     uint64_t total = job.payment + job.collateral;
-    if ((uint32_t)job.status == 6 || (uint32_t)job.status == 7) {
-        total += job.dispute_fee;
-    }
 
     UserKeyID kid;
     kid.m_Cid = cid;
@@ -382,7 +390,6 @@ void On_user_dispute(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    // Load Job from chain to get dispute_fee and asset_id
     Idios::KeyJob key;
     key.job_id = args.job_id;
     Env::Key_T<Idios::KeyJob> k;
@@ -436,7 +443,6 @@ void On_user_refund(const ContractID& cid)
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    // Load Job from chain to get payment, collateral and asset_id
     Idios::KeyJob key;
     key.job_id = args.job_id;
     Env::Key_T<Idios::KeyJob> k;
@@ -450,8 +456,6 @@ void On_user_refund(const ContractID& cid)
     Env::KeyID sigKid(&kid, sizeof(kid));
 
     FundsChange fc;
-    // Must match the contract: refund returns payment only. Forfeited
-    // collateral (Active path) stays locked in the contract by design.
     fc.m_Amount  = job.payment;
     fc.m_Aid     = job.asset_id;
     fc.m_Consume = 0;
@@ -463,40 +467,147 @@ void On_user_refund(const ContractID& cid)
 }
 
 // ----------------------------------------------------------------
-//  Arbitrator actions: resolve dispute to Alice (winner takes all)
+//  Arbitrator actions (M of N): register a bond
 // ----------------------------------------------------------------
 
-void On_arbitrator_resolve_alice(const ContractID& cid)
+void On_arbitrator_register(const ContractID& cid)
 {
-    Idios::ResolveToAlice args;
+    Idios::Register args;
     Env::Memset(&args, 0, sizeof(args));
-    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+    if (!Env::DocGetNum64("stake", &args.stake)) return On_error("stake required");
+    Env::DocGetNum32("asset_id", &args.asset_id); // default 0 (Beam)
 
-    ArbitratorKeyID kid;
+    uint32_t idx = 0;
+    Env::DocGetNum32("arb_index", &idx);
+    MofnArbKeyID kid;
+    kid.m_Idx = idx;
+    Env::DerivePk(args.arb_pk, &kid, sizeof(kid));
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    Env::GenerateKernel(&cid, Idios::ResolveToAlice::s_iMethod,
-        &args, sizeof(args), nullptr, 0, &sigKid, 1,
-        "Idios: resolve dispute to Alice",
+    FundsChange fc;
+    fc.m_Amount  = args.stake;
+    fc.m_Aid     = args.asset_id;
+    fc.m_Consume = 1; // lock the bond into the contract
+
+    Env::GenerateKernel(&cid, Idios::Register::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: register arbitrator",
         200000);
 }
 
-// ----------------------------------------------------------------
-//  Arbitrator actions: resolve dispute to Bob (winner takes all)
-// ----------------------------------------------------------------
-
-void On_arbitrator_resolve_bob(const ContractID& cid)
+void On_arbitrator_deregister(const ContractID& cid)
 {
-    Idios::ResolveToBob args;
+    Idios::Deregister args;
+    Env::Memset(&args, 0, sizeof(args));
+
+    uint32_t idx = 0;
+    Env::DocGetNum32("arb_index", &idx);
+    MofnArbKeyID kid;
+    kid.m_Idx = idx;
+    Env::DerivePk(args.arb_pk, &kid, sizeof(kid));
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    Env::GenerateKernel(&cid, Idios::Deregister::s_iMethod,
+        &args, sizeof(args), nullptr, 0, &sigKid, 1,
+        "Idios: deregister arbitrator",
+        200000);
+}
+
+void On_arbitrator_reclaim(const ContractID& cid)
+{
+    Idios::ReclaimStake args;
+    Env::Memset(&args, 0, sizeof(args));
+
+    uint32_t idx = 0;
+    Env::DocGetNum32("arb_index", &idx);
+    MofnArbKeyID kid;
+    kid.m_Idx = idx;
+    Env::DerivePk(args.arb_pk, &kid, sizeof(kid));
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    // read the bond to know how much to unlock and in which asset
+    Idios::KeyArb akey;
+    Env::Memcpy(&akey.arb_pk, &args.arb_pk, sizeof(PubKey));
+    Env::Key_T<Idios::KeyArb> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = akey;
+    Idios::ArbRec a;
+    if (!Env::VarReader::Read_T(k, a)) return On_error("arbitrator not found");
+
+    FundsChange fc;
+    fc.m_Amount  = a.stake;
+    fc.m_Aid     = a.asset_id;
+    fc.m_Consume = 0; // unlock the bond back out
+
+    Env::GenerateKernel(&cid, Idios::ReclaimStake::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: reclaim arbitrator bond",
+        200000);
+}
+
+void On_arbitrator_vote(const ContractID& cid)
+{
+    Idios::Vote args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
+    uint32_t side = 0;
+    if (!Env::DocGetNum32("side", &side)) return On_error("side required (0=Alice, 1=Bob)");
+    if (side > 1) return On_error("side must be 0 (Alice) or 1 (Bob)");
+    args.side = (uint8_t) side;
+
+    uint32_t idx = 0;
+    Env::DocGetNum32("arb_index", &idx);
+    MofnArbKeyID kid;
+    kid.m_Idx = idx;
+    Env::DerivePk(args.arb_pk, &kid, sizeof(kid));
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    // a vote moves no funds; the Mth matching vote only flips status
+    Env::GenerateKernel(&cid, Idios::Vote::s_iMethod,
+        &args, sizeof(args), nullptr, 0, &sigKid, 1,
+        "Idios: cast arbitrator vote",
+        200000);
+}
+
+void On_arbitrator_claim_reward(const ContractID& cid)
+{
+    Idios::ClaimArbReward args;
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("job_id", &args.job_id)) return On_error("job_id required");
 
-    ArbitratorKeyID kid;
+    uint32_t idx = 0;
+    Env::DocGetNum32("arb_index", &idx);
+    MofnArbKeyID kid;
+    kid.m_Idx = idx;
+    Env::DerivePk(args.arb_pk, &kid, sizeof(kid));
     Env::KeyID sigKid(&kid, sizeof(kid));
 
-    Env::GenerateKernel(&cid, Idios::ResolveToBob::s_iMethod,
-        &args, sizeof(args), nullptr, 0, &sigKid, 1,
-        "Idios: resolve dispute to Bob",
+    // need the job asset and the per voter share to set the FundsChange
+    Idios::KeyJob jkey;
+    jkey.job_id = args.job_id;
+    Env::Key_T<Idios::KeyJob> jk;
+    jk.m_Prefix.m_Cid = cid;
+    jk.m_KeyInContract = jkey;
+    Idios::Job job;
+    if (!Env::VarReader::Read_T(jk, job)) return On_error("Job not found");
+
+    Idios::KeyDispute dkey;
+    dkey.job_id = args.job_id;
+    Env::Key_T<Idios::KeyDispute> dk;
+    dk.m_Prefix.m_Cid = cid;
+    dk.m_KeyInContract = dkey;
+    Idios::DisputeState ds;
+    if (!Env::VarReader::Read_T(dk, ds)) return On_error("dispute not found");
+    if (ds.resolution == 0) return On_error("dispute not resolved");
+
+    FundsChange fc;
+    fc.m_Amount  = ds.fee_share;
+    fc.m_Aid     = job.asset_id;
+    fc.m_Consume = 0; // unlock this voter's reward share
+
+    Env::GenerateKernel(&cid, Idios::ClaimArbReward::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: claim arbitrator reward share",
         200000);
 }
 
@@ -523,6 +634,20 @@ void On_arbitrator_get_key(const ContractID& cid)
     Env::DocAddBlob("pub_key", &pk, sizeof(PubKey));
 }
 
+// M of N arbitrator key for a given index (default 0).
+void On_arbitrator_get_mofn_key(const ContractID& cid)
+{
+    uint32_t idx = 0;
+    Env::DocGetNum32("arb_index", &idx);
+    MofnArbKeyID kid;
+    kid.m_Idx = idx;
+    PubKey pk;
+    Env::DerivePk(pk, &kid, sizeof(kid));
+    Env::DocGroup gr("key");
+    Env::DocAddNum32("arb_index", idx);
+    Env::DocAddBlob("pub_key", &pk, sizeof(PubKey));
+}
+
 void On_treasury_get_key(const ContractID& cid)
 {
     TreasuryKeyID kid;
@@ -536,10 +661,6 @@ void On_treasury_get_key(const ContractID& cid)
 //  Arbitrator-timeout: void a stale dispute, then per-party claims
 // ----------------------------------------------------------------
 
-// Permissionless trigger. The contract method does no AddSig, so we pass no
-// signer here; the wallet still funds the kernel fee. If the toolchain
-// rejects an unsigned shader kernel, re-enable the requester's UserKeyID as
-// the signer and gate Method_16 on job.requester_pk.
 void On_user_void_dispute(const ContractID& cid)
 {
     Idios::VoidStaleDispute args;
@@ -611,7 +732,8 @@ void On_user_void_claim_node(const ContractID& cid)
 }
 
 // ----------------------------------------------------------------
-//  Treasury: sweep forfeited funds (collateral on Refunded, fee on Voided)
+//  Treasury: sweep forfeited funds (collateral Refunded, fee Voided,
+//  reward remainder Resolved)
 // ----------------------------------------------------------------
 
 void On_treasury_sweep(const ContractID& cid)
@@ -629,10 +751,22 @@ void On_treasury_sweep(const ContractID& cid)
     if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
 
     uint64_t amount = 0;
-    if ((uint32_t)job.status == Idios::JobStatus::Refunded)
+    if ((uint32_t)job.status == Idios::JobStatus::Refunded) {
         amount = job.collateral;
-    else if ((uint32_t)job.status == Idios::JobStatus::Voided)
+    } else if ((uint32_t)job.status == Idios::JobStatus::Voided) {
         amount = job.dispute_fee;
+    } else if ((uint32_t)job.status == Idios::JobStatus::ResolvedToAlice ||
+               (uint32_t)job.status == Idios::JobStatus::ResolvedToBob) {
+        // M of N reward remainder F % M
+        Idios::KeyDispute dkey;
+        dkey.job_id = args.job_id;
+        Env::Key_T<Idios::KeyDispute> dk;
+        dk.m_Prefix.m_Cid = cid;
+        dk.m_KeyInContract = dkey;
+        Idios::DisputeState ds;
+        if (Env::VarReader::Read_T(dk, ds) && ds.resolution != 0 && !ds.remainder_swept)
+            amount = ds.fee_remainder;
+    }
     if (amount == 0) return On_error("nothing to sweep for this job");
 
     TreasuryKeyID kid;
@@ -652,23 +786,7 @@ void On_treasury_sweep(const ContractID& cid)
 // ----------------------------------------------------------------
 //  User actions: mutual cancel (v5, Method 20)
 // ----------------------------------------------------------------
-//
-// The contract requires BOTH the requester and the node to sign one kernel
-// (Env::AddSig on each). Two cases:
-//
-//   Self-deal / single party holds both keys (every on-chain test, and any
-//   case where requester_pk == node_pk): the kernel still needs one
-//   signature slot PER AddSig (CheckSigs: nKeys = AddSigs + 1), so we pass
-//   this wallet's UserKeyID twice, filling both slots with the same key.
-//
-//   Two independent wallets: a single wallet cannot produce both signatures
-//   in one call. Real cross-wallet cancel needs Beam's interactive multi-party
-//   kernel flow (one party builds and partially signs, the other completes
-//   it before broadcast). That flow is NOT implemented here yet and must be
-//   verified against Beam's negotiated-transaction dapp examples before it is
-//   relied on in production. Until then, mutual cancel is usable for the
-//   self-deal test and for same-wallet contracts only.
-//
+
 void On_user_mutual_cancel(const ContractID& cid)
 {
     Idios::MutualCancel args;
@@ -683,9 +801,6 @@ void On_user_mutual_cancel(const ContractID& cid)
     Idios::Job job;
     if (!Env::VarReader::Read_T(k, job)) return On_error("Job not found");
 
-    // Payment returns to requester, collateral to node, in this tx.
-    // One signature slot per contract AddSig, in AddSig order. Self-deal:
-    // the same UserKeyID fills both slots.
     UserKeyID kid;
     kid.m_Cid = cid;
     Env::KeyID pSig[2] = {
@@ -744,6 +859,64 @@ void On_user_view_job(const ContractID& cid)
     Env::DocAddBlob("spec_hash",              job.spec_hash, 32);
 }
 
+// View the per dispute M of N state (frozen N/M, tallies, resolution).
+void On_user_view_dispute(const ContractID& cid)
+{
+    uint64_t job_id = 0;
+    if (!Env::DocGetNum64("job_id", &job_id)) return On_error("job_id required");
+
+    Idios::KeyDispute key;
+    key.job_id = job_id;
+    Env::Key_T<Idios::KeyDispute> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+
+    Idios::DisputeState ds;
+    if (!Env::VarReader::Read_T(k, ds))
+        return On_error("Dispute not found");
+
+    Env::DocGroup gr("dispute");
+    Env::DocAddNum64("frozen_n",        ds.frozen_n);
+    Env::DocAddNum32("threshold",       ds.threshold);
+    Env::DocAddNum32("vc_alice",        ds.vc_alice);
+    Env::DocAddNum32("vc_bob",          ds.vc_bob);
+    Env::DocAddNum64("fee_share",       ds.fee_share);
+    Env::DocAddNum64("fee_remainder",   ds.fee_remainder);
+    Env::DocAddNum32("resolution",      (uint32_t)ds.resolution);
+    Env::DocAddNum32("winner_paid",     (uint32_t)ds.winner_paid);
+    Env::DocAddNum32("remainder_swept", (uint32_t)ds.remainder_swept);
+}
+
+// View an arbitrator's bond and registry state by index.
+void On_arbitrator_view_arb(const ContractID& cid)
+{
+    uint32_t idx = 0;
+    Env::DocGetNum32("arb_index", &idx);
+    MofnArbKeyID akid;
+    akid.m_Idx = idx;
+    PubKey pk;
+    Env::DerivePk(pk, &akid, sizeof(akid));
+
+    Idios::KeyArb key;
+    Env::Memcpy(&key.arb_pk, &pk, sizeof(PubKey));
+    Env::Key_T<Idios::KeyArb> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = key;
+
+    Idios::ArbRec a;
+    if (!Env::VarReader::Read_T(k, a))
+        return On_error("arbitrator not found");
+
+    Env::DocGroup gr("arb");
+    Env::DocAddNum32("arb_index",     idx);
+    Env::DocAddBlob("pub_key",        &pk, sizeof(PubKey));
+    Env::DocAddNum64("stake",         a.stake);
+    Env::DocAddNum32("asset_id",      a.asset_id);
+    Env::DocAddNum64("registered_at", a.registered_at);
+    Env::DocAddNum64("dereg_block",   a.dereg_block);
+    Env::DocAddNum32("state",         (uint32_t)a.state);
+}
+
 // ----------------------------------------------------------------
 //  Method_0: schema export
 // ----------------------------------------------------------------
@@ -757,10 +930,17 @@ BEAM_EXPORT void Method_0()
             Env::DocGroup grRole("manager");
             { Env::DocGroup grMethod("deploy"); }
             { Env::DocGroup grMethod("view"); }
+            { Env::DocGroup grMethod("view_regcount"); }
             {
                 Env::DocGroup grMethod("view_job");
                 Env::DocAddText("job_id", "uint64");
             }
+            {
+                Env::DocGroup grMethod("view_dispute");
+                Env::DocAddText("job_id", "uint64");
+            }
+            { Env::DocGroup grMethod("schedule_upgrade"); }
+            { Env::DocGroup grMethod("explicit_upgrade"); }
         }
         {
             Env::DocGroup grRole("user");
@@ -842,16 +1022,37 @@ BEAM_EXPORT void Method_0()
         {
             Env::DocGroup grRole("arbitrator");
             {
-                Env::DocGroup grMethod("resolve_alice");
-                Env::DocAddText("job_id",   "uint64");
-                Env::DocAddText("total",    "Amount");
-                Env::DocAddText("asset_id", "AssetID");
+                Env::DocGroup grMethod("register");
+                Env::DocAddText("stake",     "Amount");
+                Env::DocAddText("asset_id",  "AssetID (optional, 0=Beam)");
+                Env::DocAddText("arb_index", "uint32 (optional, 0; distinct keys per index)");
             }
             {
-                Env::DocGroup grMethod("resolve_bob");
-                Env::DocAddText("job_id",   "uint64");
-                Env::DocAddText("total",    "Amount");
-                Env::DocAddText("asset_id", "AssetID");
+                Env::DocGroup grMethod("deregister");
+                Env::DocAddText("arb_index", "uint32 (optional, 0)");
+            }
+            {
+                Env::DocGroup grMethod("reclaim");
+                Env::DocAddText("arb_index", "uint32 (optional, 0)");
+            }
+            {
+                Env::DocGroup grMethod("vote");
+                Env::DocAddText("job_id",    "uint64");
+                Env::DocAddText("side",      "uint32 (0=Alice, 1=Bob)");
+                Env::DocAddText("arb_index", "uint32 (optional, 0)");
+            }
+            {
+                Env::DocGroup grMethod("claim_reward");
+                Env::DocAddText("job_id",    "uint64");
+                Env::DocAddText("arb_index", "uint32 (optional, 0)");
+            }
+            {
+                Env::DocGroup grMethod("get_mofn_key");
+                Env::DocAddText("arb_index", "uint32 (optional, 0)");
+            }
+            {
+                Env::DocGroup grMethod("view_arb");
+                Env::DocAddText("arb_index", "uint32 (optional, 0)");
             }
         }
         {
@@ -939,7 +1140,9 @@ BEAM_EXPORT void Method_1()
         {"deploy",   On_manager_deploy},
         {"create",   On_manager_deploy},
         {"view",     On_manager_view},
+        {"view_regcount", On_manager_view_regcount},
         {"view_job", On_user_view_job},
+        {"view_dispute", On_user_view_dispute},
         {"schedule_upgrade", On_manager_schedule_upgrade},
         {"explicit_upgrade", On_manager_explicit_upgrade},
     };
@@ -959,12 +1162,19 @@ BEAM_EXPORT void Method_1()
         {"void_claim_requester",  On_user_void_claim_requester},
         {"void_claim_node",       On_user_void_claim_node},
         {"get_key",             On_user_get_key},
+        {"view_job",            On_user_view_job},
+        {"view_dispute",        On_user_view_dispute},
         {"batch_create_b",      On_user_batch_create_b},
     };
     static const ActionEntry ARBITRATOR_ACTIONS[] = {
-        {"resolve_alice", On_arbitrator_resolve_alice},
-        {"resolve_bob",   On_arbitrator_resolve_bob},
-        {"get_key",       On_arbitrator_get_key},
+        {"register",     On_arbitrator_register},
+        {"deregister",   On_arbitrator_deregister},
+        {"reclaim",      On_arbitrator_reclaim},
+        {"vote",         On_arbitrator_vote},
+        {"claim_reward", On_arbitrator_claim_reward},
+        {"get_key",      On_arbitrator_get_key},
+        {"get_mofn_key", On_arbitrator_get_mofn_key},
+        {"view_arb",     On_arbitrator_view_arb},
     };
     static const ActionEntry TREASURY_ACTIONS[] = {
         {"sweep",   On_treasury_sweep},
