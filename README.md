@@ -358,8 +358,8 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 Supports all three Idios roles:
 
-- **Worker** (Bob): commit, submit_delivery, claim.
-- **Client** (Alice / requester): hash-match auto-approve, claim on dispute won or refund.
+- **Worker** commit, submit_delivery, claim.
+- **Client** hash-match auto-approve, claim on dispute won or refund.
 - **Arbitrator**: hash-match auto-resolve in Mode B disputes (`resolve_bob` on match, `resolve_alice` on mismatch).
 
 The daemon automates all three roles and has been exercised end to end on Beam mainnet, including the dispute and arbitrator timeout recovery paths.
