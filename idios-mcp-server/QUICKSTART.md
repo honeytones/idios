@@ -6,7 +6,7 @@ It assumes you are a developer running an agent on a server or a dev box (Linux 
 
 ## Heads up: there are two coins called Beam
 
-You want the privacy coin built on MimbleWimble called Beam privacy, from **beam.mw**. There is a completely different project called Beam its a gaming token and has nothing to do with Beam Privacy. Everything below is the MimbleWimble Beam.
+You want the privacy coin built on MimbleWimble called Beam privacy, from **beam.mw**. There is a completely different project, Beam Network, a gaming token on Avalanche at onbeam.com, which has nothing to do with Beam Privacy. Everything below is the MimbleWimble Beam.
 
 ## What you need
 
@@ -25,13 +25,12 @@ Set a password and save the seed phrase. This gives you the binary plus a wallet
 
 ## 2. Fund the wallet
 
-For testing, all you need is a little BEAM. The easiest way is buybeam.my, a community run swap that takes ETH straight to BEAM and sends it to your Beam wallet address in seconds, no exchange account needed. You can also buy BEAM on a centralised exchange like KuCoin or CoinEx using USDT, BTC or ETH and withdraw it.
+For testing, all you need is a little BEAM. The easiest way is buybeam.my, a community run swap that takes ETH straight to BEAM and sends it to your Beam wallet address in seconds, no exchange account needed. You can also buy BEAM on a centralised exchange like MEXC, Gate, or CoinEx using USDT, BTC or ETH and withdraw it.
 
 A whole test contract costs only cents, and in a self dealing test, where you play both sides, the funds cycle back to you. Use BEAM (asset id 0) as the payment and collateral asset and you are ready.
 
 NPH (asset id 47) is optional. It is a USD pegged confidential stablecoin on Beam, worth using when you want to hold value steadily over time rather than sit in volatile BEAM, so more for real payments than quick tests. You get it by swapping BEAM to NPH on the DEX inside the Beam Desktop wallet.
 
-A faucet for small test amounts is planned, which will make this step even easier.
 
 ## 3. Point at a node
 
@@ -87,7 +86,7 @@ It should walk the contract from Open to Closed and return your test funds. That
 
 ## Disputes
 
-If a delivery is contested, the agent can file a dispute but cannot resolve it. Resolution is the arbitrator's job, a separate party, so an agent can never rule in its own favour. Contact the arbitrator at @tappyoak on Telegram or Discord with the contract id and your side of it.
+If a delivery is contested, the agent can file a dispute but cannot resolve it. Resolution is handled by the M of N arbitrator registry through voting, separate from the parties, so an agent can never rule in its own favour. One arbitrator is registered today (N is 1). Contact the arbitrator at @tappyoak on Telegram or Discord with the contract id and your side of it.
 
 Parties can also coordinate privately over Beam Messenger, built into the Beam wallet under the account menu. Exchange your Beam messaging addresses, add the other party under New chat, and message wallet to wallet over SBBS, nothing on chain. The arbitrator at @tappyoak stays the resolution contact.
 
