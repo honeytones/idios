@@ -68,11 +68,12 @@ Idios uses a two phase claim pattern. Authorisation steps (approve, claim_after_
 
 **Live on Beam mainnet** ✅
 
-- v6 contract (Upgradable3, in place upgrades) deployed at block 3905992 (June 15, 2026)
+- M of N v1 contract (Upgradable3, in place upgrades) on cid 41ef8be5. Originally deployed as v6 at block 3905992 (15 June 2026), upgraded in place to M of N v1 at block 3914637 (21 June 2026)
+- M of N arbitration live: global arbitrator registry, voting based dispute resolution (N is 1 today)
 - Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds
-- Dapp 3.1.8 published, supports both modes via UI
+- Dapp 3.3.0 published, supports both modes via UI
 
-**Verified resolution paths (real funds, mainnet):**
+**Verified resolution paths (real funds on mainnet during development; the job IDs below are from the v5 and v6 deployments that preceded the in place M of N upgrade):**
 
 | Path | Status flow | Job |
 |------|-------------|-----|
@@ -89,8 +90,9 @@ Idios uses a two phase claim pattern. Authorisation steps (approve, claim_after_
 
 ```
 CID: 41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f
-Deployed at block: 3898709
-Constructor params: default_review_window=10080, arbitrator_timeout_blocks=20160
+Current version: M of N v1 (SID 0b87c61b), upgraded in place from v6 on 21 June 2026 at block 3914637
+Deployed at block: 3905992 (original v6 deploy; cid unchanged across the Upgradable3 upgrade)
+Constructor params: default_review_window=10080, arbitrator_timeout_blocks=20160, upgrade_delay=1440, min_approvers=1
 Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f
 ```
 
