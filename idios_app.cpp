@@ -475,14 +475,28 @@ void On_arbitrator_register(const ContractID& cid)
     Idios::Register args;
     Env::Memset(&args, 0, sizeof(args));
     if (!Env::DocGetNum64("stake", &args.stake)) return On_error("stake required");
-    Env::DocGetNum32("asset_id", &args.asset_id); // default 0 (Beam)
+    Env::DocGetNum32("asset_id", &args.asset_id);
+    // v2 gates, pre checked here for clear errors; the contract enforces them
+    if (args.asset_id != 0)                 return On_error("bond must be BEAM (asset 0)");
+    if (args.stake < Idios::s_MinArbBond)   return On_error("stake below the 10 BEAM floor");
 
     uint32_t idx = 0;
     Env::DocGetNum32("arb_index", &idx);
     MofnArbKeyID kid;
     kid.m_Idx = idx;
     Env::DerivePk(args.arb_pk, &kid, sizeof(kid));
-    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    // v2: the kernel carries the arbitrator signature AND the Upgradable3
+    // admin signature (curation until an arbitrator slash exists). Both keys
+    // in one wallet works (this is how tones registers his own indexes);
+    // registering a genuinely external arbitrator needs a cross wallet dual
+    // signature, the same limitation as mutual_cancel, and is exactly the
+    // case the gate exists to curate.
+    AdminKeyID akid;
+    Env::KeyID pSig[2] = {
+        Env::KeyID(&kid, sizeof(kid)),
+        Env::KeyID(&akid, sizeof(akid)),
+    };
 
     FundsChange fc;
     fc.m_Amount  = args.stake;
@@ -490,7 +504,7 @@ void On_arbitrator_register(const ContractID& cid)
     fc.m_Consume = 1; // lock the bond into the contract
 
     Env::GenerateKernel(&cid, Idios::Register::s_iMethod,
-        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        &args, sizeof(args), &fc, 1, pSig, 2,
         "Idios: register arbitrator",
         200000);
 }
@@ -566,7 +580,7 @@ void On_arbitrator_vote(const ContractID& cid)
     Env::GenerateKernel(&cid, Idios::Vote::s_iMethod,
         &args, sizeof(args), nullptr, 0, &sigKid, 1,
         "Idios: cast arbitrator vote",
-        200000);
+        400000);
 }
 
 void On_arbitrator_claim_reward(const ContractID& cid)
@@ -608,6 +622,145 @@ void On_arbitrator_claim_reward(const ContractID& cid)
     Env::GenerateKernel(&cid, Idios::ClaimArbReward::s_iMethod,
         &args, sizeof(args), &fc, 1, &sigKid, 1,
         "Idios: claim arbitrator reward share",
+        200000);
+}
+
+// ----------------------------------------------------------------
+//  Worker bond actions (v2, reputation). The bond key is the worker's
+//  UserKeyID, the same node key that takes jobs.
+// ----------------------------------------------------------------
+
+void On_user_worker_register(const ContractID& cid)
+{
+    Idios::WorkerRegister args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetNum64("stake", &args.stake)) return On_error("stake required");
+    if (args.stake == 0)                         return On_error("stake must be > 0");
+    args.asset_id = 0; // BEAM only, contract enforced
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::DerivePk(args.worker_pk, &kid, sizeof(kid));
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = args.stake;
+    fc.m_Aid     = 0;
+    fc.m_Consume = 1; // lock the bond into the contract
+
+    Env::GenerateKernel(&cid, Idios::WorkerRegister::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: register worker bond",
+        200000);
+}
+
+void On_user_worker_deregister(const ContractID& cid)
+{
+    Idios::WorkerDeregister args;
+    Env::Memset(&args, 0, sizeof(args));
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::DerivePk(args.worker_pk, &kid, sizeof(kid));
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    Env::GenerateKernel(&cid, Idios::WorkerDeregister::s_iMethod,
+        &args, sizeof(args), nullptr, 0, &sigKid, 1,
+        "Idios: deregister worker bond",
+        200000);
+}
+
+void On_user_worker_reclaim(const ContractID& cid)
+{
+    Idios::WorkerReclaim args;
+    Env::Memset(&args, 0, sizeof(args));
+
+    UserKeyID kid;
+    kid.m_Cid = cid;
+    Env::DerivePk(args.worker_pk, &kid, sizeof(kid));
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    // read the bond to know how much to unlock
+    Idios::KeyWorkerBond wkey;
+    Env::Memcpy(&wkey.worker_pk, &args.worker_pk, sizeof(PubKey));
+    Env::Key_T<Idios::KeyWorkerBond> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = wkey;
+    Idios::WorkerBondRec wb;
+    if (!Env::VarReader::Read_T(k, wb)) return On_error("worker bond not found");
+    if (wb.state == 3)                  return On_error("bond is slashed, cannot reclaim");
+    if (wb.encumbrances != 0)           return On_error("bond encumbered by an open dispute");
+
+    FundsChange fc;
+    fc.m_Amount  = wb.stake;
+    fc.m_Aid     = 0;
+    fc.m_Consume = 0; // unlock the bond back out
+
+    Env::GenerateKernel(&cid, Idios::WorkerReclaim::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: reclaim worker bond",
+        200000);
+}
+
+// View a worker bond. worker_pk optional; defaults to the caller's own key,
+// pass a pk to inspect someone else's bond (the score reader's path).
+void On_user_view_worker_bond(const ContractID& cid)
+{
+    PubKey pk;
+    if (!Env::DocGetBlob("worker_pk", &pk, sizeof(PubKey))) {
+        UserKeyID kid;
+        kid.m_Cid = cid;
+        Env::DerivePk(pk, &kid, sizeof(kid));
+    }
+
+    Idios::KeyWorkerBond wkey;
+    Env::Memcpy(&wkey.worker_pk, &pk, sizeof(PubKey));
+    Env::Key_T<Idios::KeyWorkerBond> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = wkey;
+    Idios::WorkerBondRec wb;
+    if (!Env::VarReader::Read_T(k, wb))
+        return On_error("worker bond not found");
+
+    Env::DocGroup gr("worker_bond");
+    Env::DocAddBlob("worker_pk",      &pk, sizeof(PubKey));
+    Env::DocAddNum64("stake",         wb.stake);
+    Env::DocAddNum64("bonded_at",     wb.bonded_at);
+    Env::DocAddNum64("dereg_block",   wb.dereg_block);
+    Env::DocAddNum32("encumbrances",  wb.encumbrances);
+    Env::DocAddNum32("state",         (uint32_t)wb.state);
+}
+
+// Treasury pulls a slashed bond (Method 29). Halts on chain unless the bond
+// is slashed and every encumbered dispute has terminated (rule 125).
+void On_treasury_slash_sweep(const ContractID& cid)
+{
+    Idios::SlashSweep args;
+    Env::Memset(&args, 0, sizeof(args));
+    if (!Env::DocGetBlob("worker_pk", &args.worker_pk, sizeof(PubKey)))
+        return On_error("worker_pk required");
+
+    Idios::KeyWorkerBond wkey;
+    Env::Memcpy(&wkey.worker_pk, &args.worker_pk, sizeof(PubKey));
+    Env::Key_T<Idios::KeyWorkerBond> k;
+    k.m_Prefix.m_Cid = cid;
+    k.m_KeyInContract = wkey;
+    Idios::WorkerBondRec wb;
+    if (!Env::VarReader::Read_T(k, wb)) return On_error("worker bond not found");
+    if (wb.state != 3)                  return On_error("bond is not slashed");
+    if (wb.encumbrances != 0)           return On_error("open encumbered disputes remain, sweep must wait");
+
+    TreasuryKeyID kid;
+    Env::KeyID sigKid(&kid, sizeof(kid));
+
+    FundsChange fc;
+    fc.m_Amount  = wb.stake;
+    fc.m_Aid     = 0;
+    fc.m_Consume = 0;
+
+    Env::GenerateKernel(&cid, Idios::SlashSweep::s_iMethod,
+        &args, sizeof(args), &fc, 1, &sigKid, 1,
+        "Idios: treasury sweep slashed worker bond",
         200000);
 }
 
@@ -885,6 +1038,7 @@ void On_user_view_dispute(const ContractID& cid)
     Env::DocAddNum32("resolution",      (uint32_t)ds.resolution);
     Env::DocAddNum32("winner_paid",     (uint32_t)ds.winner_paid);
     Env::DocAddNum32("remainder_swept", (uint32_t)ds.remainder_swept);
+    Env::DocAddNum32("bond_encumbered", (uint32_t)ds.bond_encumbered);
 }
 
 // View an arbitrator's bond and registry state by index.
@@ -1018,13 +1172,22 @@ BEAM_EXPORT void Method_0()
                 Env::DocGroup grMethod("void_claim_node");
                 Env::DocAddText("job_id", "uint64");
             }
+            {
+                Env::DocGroup grMethod("worker_register");
+                Env::DocAddText("stake", "Amount (BEAM only, slashable reputation bond)");
+            }
+            { Env::DocGroup grMethod("worker_deregister"); }
+            { Env::DocGroup grMethod("worker_reclaim"); }
+            {
+                Env::DocGroup grMethod("view_worker_bond");
+                Env::DocAddText("worker_pk", "PubKey (optional, defaults to own key)");
+            }
         }
         {
             Env::DocGroup grRole("arbitrator");
             {
                 Env::DocGroup grMethod("register");
-                Env::DocAddText("stake",     "Amount");
-                Env::DocAddText("asset_id",  "AssetID (optional, 0=Beam)");
+                Env::DocAddText("stake",     "Amount (BEAM only, min 10 BEAM, needs admin co sign)");
                 Env::DocAddText("arb_index", "uint32 (optional, 0; distinct keys per index)");
             }
             {
@@ -1060,6 +1223,10 @@ BEAM_EXPORT void Method_0()
             {
                 Env::DocGroup grMethod("sweep");
                 Env::DocAddText("job_id", "uint64");
+            }
+            {
+                Env::DocGroup grMethod("slash_sweep");
+                Env::DocAddText("worker_pk", "PubKey (slashed bond to pull)");
             }
         }
     }
@@ -1164,6 +1331,10 @@ BEAM_EXPORT void Method_1()
         {"get_key",             On_user_get_key},
         {"view_job",            On_user_view_job},
         {"view_dispute",        On_user_view_dispute},
+        {"worker_register",     On_user_worker_register},
+        {"worker_deregister",   On_user_worker_deregister},
+        {"worker_reclaim",      On_user_worker_reclaim},
+        {"view_worker_bond",    On_user_view_worker_bond},
         {"batch_create_b",      On_user_batch_create_b},
     };
     static const ActionEntry ARBITRATOR_ACTIONS[] = {
@@ -1177,8 +1348,9 @@ BEAM_EXPORT void Method_1()
         {"view_arb",     On_arbitrator_view_arb},
     };
     static const ActionEntry TREASURY_ACTIONS[] = {
-        {"sweep",   On_treasury_sweep},
-        {"get_key", On_treasury_get_key},
+        {"sweep",       On_treasury_sweep},
+        {"slash_sweep", On_treasury_slash_sweep},
+        {"get_key",     On_treasury_get_key},
     };
     static const RoleEntry VALID_ROLES[] = {
         {"manager",    MANAGER_ACTIONS,    sizeof(MANAGER_ACTIONS) / sizeof(MANAGER_ACTIONS[0])},

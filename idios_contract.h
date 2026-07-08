@@ -4,7 +4,7 @@
 
 namespace Idios {
 
-    static const ShaderID s_SID = {0x0b,0x87,0xc6,0x1b,0x3b,0x16,0x14,0x72,0x3a,0xc0,0x86,0xaf,0x36,0x56,0x95,0xd1,0x86,0x52,0x99,0x94,0xa4,0x81,0x3a,0xdb,0xec,0x99,0xc0,0x2e,0xeb,0xd7,0x9d,0x19};
+    static const ShaderID s_SID = {0xa6,0x1f,0x3a,0x93,0xf5,0x5b,0x9e,0xab,0xcc,0xd9,0x83,0x75,0x77,0xf1,0xf7,0x2a,0x0d,0x77,0x5b,0x43,0xd2,0xdf,0x6e,0xe3,0x0b,0x15,0x48,0xe6,0xee,0x52,0x3b,0x3c};
 
 #pragma pack (push, 1)
 
@@ -17,6 +17,9 @@ struct Tags {
     static const uint8_t s_Arb      = 3; // per arbitrator: bond and registry state
     static const uint8_t s_Vote      = 4; // per (job, arbitrator): the cast vote
     static const uint8_t s_RegCount = 5; // single counter: live registered bonds (N)
+    // v2 addition (worker reputation bond). New namespace only, everything
+    // above is unchanged.
+    static const uint8_t s_WorkerBond = 6; // per worker (node pk): slashable bond
 };
 
 // Key structs live inside the packed region so the contract and the app
@@ -48,6 +51,11 @@ struct KeyVote {
 
 struct KeyRegCount {
     uint8_t prefix = Tags::s_RegCount;
+};
+
+struct KeyWorkerBond {
+    uint8_t prefix = Tags::s_WorkerBond;
+    PubKey  worker_pk;
 };
 
 enum JobStatus : uint8_t {
@@ -119,6 +127,10 @@ struct Create {
 // resolution: 0 = none, 1 = Alice, 2 = Bob. Created at Dispute, finalised at
 // the Mth matching vote. The whole dispute_fee leaves as threshold shares of
 // fee_share plus the single fee_remainder swept to treasury.
+// v2: bond_encumbered appended (field offsets above it unchanged). Safe to
+// grow this struct in the v1 -> v2 upgrade ONLY because production has zero
+// dispute records (explorer verified, July 2026); a chain with live v1
+// disputes could not extend it, LoadDispute size checks would orphan them.
 struct DisputeState {
     uint64_t frozen_n;       // live registry size N, frozen at dispute time
     uint32_t threshold;      // M = N/2 + 1 (1 if N == 0)
@@ -129,16 +141,41 @@ struct DisputeState {
     uint8_t  resolution;     // 0 none, 1 Alice, 2 Bob
     uint8_t  winner_paid;    // P + C claimed by the winner
     uint8_t  remainder_swept;// fee_remainder taken by treasury
+    uint8_t  bond_encumbered;// v2: this dispute holds an encumbrance on the
+                             // worker's bond (set at filing, cleared once at
+                             // resolution or void)
 };
 
 // state: 0 = registered, 1 = deregistering, 2 = gone. The bond is pure sybil
-// resistance in v1, never slashed; reclaimed in full after the cooldown.
+// resistance, never slashed; reclaimed in full after the cooldown.
+// v2: registration is hardened (BEAM only, s_MinArbBond floor, admin co
+// sign) and a gone record may be overwritten by a fresh registration.
 struct ArbRec {
     Amount  stake;
     AssetID asset_id;
     Height  registered_at;   // only arbs registered before a dispute may vote on it
     Height  dereg_block;
     uint8_t state;
+};
+
+// v2 arbitrator bond floor: 10 BEAM in groth. Hardcoded, not a Ctor param,
+// so Params stays byte identical across the upgrade.
+static const Amount s_MinArbBond = 1000000000ULL;
+
+// v2 worker reputation bond, keyed by the worker's node pk (Tags
+// s_WorkerBond). BEAM only (no asset field; the register gate enforces
+// asset 0), no floor: the off chain score reader shows the amount, dust is
+// self defeating. state: 0 registered, 1 deregistering, 2 gone, 3 slashed.
+// encumbrances counts live disputes that froze this bond at filing; reclaim
+// halts while it is nonzero (closes the mid dispute escape) and slash_sweep
+// waits for it to reach zero (an early sweep would free the identity to re
+// bond while an old dispute could still hit the fresh bond).
+struct WorkerBondRec {
+    Amount   stake;
+    Height   bonded_at;
+    Height   dereg_block;
+    uint32_t encumbrances;
+    uint8_t  state;
 };
 
 // side: 0 = Alice, 1 = Bob. One immutable record per (job, arbitrator).
@@ -289,6 +326,32 @@ struct ClaimArbReward {
     static const uint32_t s_iMethod = 25;
     uint64_t job_id;
     PubKey   arb_pk;
+};
+
+// ---- v2 methods (worker reputation bond) -----------------------------------
+
+struct WorkerRegister {
+    static const uint32_t s_iMethod = 26;
+    PubKey   worker_pk;
+    Amount   stake;
+    AssetID  asset_id;      // must be 0 (BEAM); kept explicit so the gate is visible
+};
+
+struct WorkerDeregister {
+    static const uint32_t s_iMethod = 27;
+    PubKey   worker_pk;
+};
+
+struct WorkerReclaim {
+    static const uint32_t s_iMethod = 28;
+    PubKey   worker_pk;
+};
+
+// Treasury pulls a slashed bond. Waits for encumbrances == 0 (see
+// WorkerBondRec comment).
+struct SlashSweep {
+    static const uint32_t s_iMethod = 29;
+    PubKey   worker_pk;
 };
 
 struct View {

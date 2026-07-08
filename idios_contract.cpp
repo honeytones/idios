@@ -12,6 +12,7 @@ using Idios::KeyDispute;
 using Idios::KeyArb;
 using Idios::KeyVote;
 using Idios::KeyRegCount;
+using Idios::KeyWorkerBond;
 
 // ---- storage helpers ------------------------------------------------------
 
@@ -54,14 +55,6 @@ static bool LoadArb(const PubKey& pk, Idios::ArbRec& a) {
     Env::Memcpy(&key.arb_pk, &pk, sizeof(PubKey));
     uint32_t n = Env::LoadVar(&key, sizeof(key), &a, sizeof(a), KeyTag::Internal);
     return n == sizeof(a);
-}
-
-static bool ArbExists(const PubKey& pk) {
-    KeyArb key;
-    Env::Memcpy(&key.arb_pk, &pk, sizeof(PubKey));
-    Idios::ArbRec a;
-    uint32_t n = Env::LoadVar(&key, sizeof(key), &a, sizeof(a), KeyTag::Internal);
-    return n > 0;
 }
 
 static void SaveArb(const PubKey& pk, const Idios::ArbRec& a) {
@@ -109,6 +102,22 @@ static void SaveRegCount(uint64_t value) {
     Idios::RegCount rc;
     rc.n = value;
     Env::SaveVar(&key, sizeof(key), &rc, sizeof(rc), KeyTag::Internal);
+}
+
+// ---- v2 worker bond helpers -------------------------------------------------
+
+static bool LoadWorkerBond(const PubKey& pk, Idios::WorkerBondRec& wb) {
+    KeyWorkerBond key;
+    Env::Memcpy(&key.worker_pk, &pk, sizeof(PubKey));
+    uint32_t n = Env::LoadVar(&key, sizeof(key), &wb, sizeof(wb), KeyTag::Internal);
+    return n == sizeof(wb);
+}
+
+static void SaveWorkerBond(const PubKey& pk, const Idios::WorkerBondRec& wb) {
+    KeyWorkerBond key;
+    Env::Memcpy(&key.worker_pk, &pk, sizeof(PubKey));
+    Env::SaveVar(&key, sizeof(key), &wb, sizeof(wb), KeyTag::Internal);
+    Env::EmitLog(&key, sizeof(key), &wb, sizeof(wb), KeyTag::Internal);
 }
 
 static bool HashesMatch(const uint8_t* a, const uint8_t* b) {
@@ -303,6 +312,18 @@ BEAM_EXPORT void Method_11(const Idios::Dispute& args) {
     ds.frozen_n  = n;
     ds.threshold = (n > 0) ? (uint32_t)(n / 2 + 1) : 1;
     ds.resolution = 0;
+
+    // v2: encumber the worker's live bond, if any. Only the bond that exists
+    // when the dispute is filed is at risk from it; a bond registered later
+    // is untouched, by design. The encumbrance blocks reclaim until this
+    // dispute resolves or voids.
+    Idios::WorkerBondRec wb;
+    if (LoadWorkerBond(job.node_pk, wb) && wb.stake > 0 && wb.state <= 1) {
+        wb.encumbrances += 1;
+        SaveWorkerBond(job.node_pk, wb);
+        ds.bond_encumbered = 1;
+    }
+
     SaveDispute(args.job_id, ds);
 }
 
@@ -371,6 +392,20 @@ BEAM_EXPORT void Method_16(const Idios::VoidStaleDispute& args) {
 
     job.status = Idios::JobStatus::Voided;
     SaveJob(job);
+
+    // v2: a voided dispute releases its encumbrance, the bond is untouched.
+    // Tolerates a Disputed job without a (v2 sized) dispute record: a pre v2
+    // dispute migrated in place has none, and only this void path drains it.
+    Idios::DisputeState ds;
+    if (LoadDispute(args.job_id, ds) && ds.bond_encumbered) {
+        Idios::WorkerBondRec wb;
+        if (LoadWorkerBond(job.node_pk, wb)) {
+            if (wb.encumbrances > 0) wb.encumbrances -= 1;
+            SaveWorkerBond(job.node_pk, wb);
+        }
+        ds.bond_encumbered = 0;
+        SaveDispute(args.job_id, ds);
+    }
 }
 
 BEAM_EXPORT void Method_17(const Idios::VoidClaimRequester& args) {
@@ -447,13 +482,33 @@ BEAM_EXPORT void Method_20(const Idios::MutualCancel& args) {
 // ---- M of N (v1) methods --------------------------------------------------
 
 // Method_21: register as an arbitrator. Lock a standing bond (pure sybil
-// resistance in v1, never slashed) and bump the live registry counter N.
+// resistance, never slashed) and bump the live registry counter N.
+// v2 hardening, closing the dust sybil quorum capture found in the July 2026
+// deep dive (two dust registrations captured a majority on every future
+// dispute): the bond must be BEAM, must meet the s_MinArbBond floor, and the
+// kernel must also carry the Upgradable3 admin signature (curation until an
+// arbitrator slash exists; the app adds both keys, which works single wallet
+// like mutual_cancel, and an external arbitrator registration is exactly the
+// case the gate is meant to curate). A gone (state 2) record may be
+// overwritten by a fresh registration; its registered_at is fresh, so a
+// rebirth never regains eligibility on a dispute filed during a prior life.
+// The pre v2 index 0 bond is grandfathered: gates apply at registration only.
 BEAM_EXPORT void Method_21(const Idios::Register& args) {
-    Env::Halt_if(args.stake == 0);
+    Env::Halt_if(args.asset_id != 0);                    // v2: BEAM only
+    Env::Halt_if(args.stake < Idios::s_MinArbBond);      // v2: floor (covers 0)
     Env::Halt_if(Env::Memis0(&args.arb_pk, sizeof(args.arb_pk)));
-    Env::Halt_if(ArbExists(args.arb_pk)); // ids are not reused in v1
+
+    Idios::ArbRec prev;
+    if (LoadArb(args.arb_pk, prev))
+        Env::Halt_if(prev.state != 2);                   // v2: only gone may re register
 
     Env::AddSig(args.arb_pk);
+
+    // v2: admin co sign, the same admin key that controls upgrades
+    Upgradable3::Settings stg;
+    stg.Load();
+    Env::AddSig(stg.m_pAdmin[0]);
+
     Env::FundsLock(args.asset_id, args.stake);
 
     Idios::ArbRec a;
@@ -544,6 +599,22 @@ BEAM_EXPORT void Method_24(const Idios::Vote& args) {
         job.status = (args.side == 0) ? Idios::JobStatus::ResolvedToAlice
                                       : Idios::JobStatus::ResolvedToBob;
         SaveJob(job);
+
+        // v2: settle the bond encumbrance at resolution. To Alice (the worker
+        // lost an arbitrated dispute) the whole live bond goes slashed, at
+        // most once; to Bob the encumbrance releases and the bond is
+        // untouched. A bond already slashed by an earlier dispute only has
+        // its encumbrance released here.
+        if (ds.bond_encumbered) {
+            Idios::WorkerBondRec wb;
+            if (LoadWorkerBond(job.node_pk, wb)) {
+                if (wb.encumbrances > 0) wb.encumbrances -= 1;
+                if (ds.resolution == 1 && wb.stake > 0 && wb.state <= 1)
+                    wb.state = 3; // slashed: reclaim halts forever, treasury sweeps
+                SaveWorkerBond(job.node_pk, wb);
+            }
+            ds.bond_encumbered = 0;
+        }
     }
     SaveDispute(args.job_id, ds);
 }
@@ -572,12 +643,100 @@ BEAM_EXPORT void Method_25(const Idios::ClaimArbReward& args) {
     SaveVote(args.job_id, args.arb_pk, v);
 }
 
+// ---- v2 methods: worker reputation bond ------------------------------------
+
+// Method_26: a worker locks a standing slashable bond to be scoreable by the
+// off chain reputation reader. BEAM only, no floor (the reader shows the
+// amount, dust is self defeating). The bond key is the worker's node pk, the
+// same key that takes jobs. Only a missing or gone record may register; a
+// slashed record must be swept by the treasury first (which also waits out
+// any remaining encumbrances), so an old dispute can never hit a fresh bond.
+BEAM_EXPORT void Method_26(const Idios::WorkerRegister& args) {
+    Env::Halt_if(args.asset_id != 0);   // BEAM only
+    Env::Halt_if(args.stake == 0);
+    Env::Halt_if(Env::Memis0(&args.worker_pk, sizeof(args.worker_pk)));
+
+    Idios::WorkerBondRec prev;
+    if (LoadWorkerBond(args.worker_pk, prev))
+        Env::Halt_if(prev.state != 2);  // only gone may (re) register
+
+    Env::AddSig(args.worker_pk);
+    Env::FundsLock(0, args.stake);
+
+    Idios::WorkerBondRec wb;
+    Env::Memset(&wb, 0, sizeof(wb));
+    wb.stake        = args.stake;
+    wb.bonded_at    = Env::get_Height();
+    wb.dereg_block  = 0;
+    wb.encumbrances = 0;
+    wb.state        = 0; // registered
+    SaveWorkerBond(args.worker_pk, wb);
+}
+
+// Method_27: begin deregistering. A slashed bond cannot deregister (the
+// state gate covers it); reclaim runs after the cooldown.
+BEAM_EXPORT void Method_27(const Idios::WorkerDeregister& args) {
+    Idios::WorkerBondRec wb;
+    Env::Halt_if(!LoadWorkerBond(args.worker_pk, wb));
+    Env::Halt_if(wb.state != 0); // must be registered
+
+    Env::AddSig(args.worker_pk);
+    wb.state       = 1; // deregistering
+    wb.dereg_block = Env::get_Height();
+    SaveWorkerBond(args.worker_pk, wb);
+}
+
+// Method_28: reclaim the bond in full after the cooldown (reusing
+// arbitrator_timeout_blocks, same as the arbitrator registry). Unlike the
+// arbitrator reclaim this DOES gate on open disputes: encumbrances must be
+// zero, because this bond is slashable and pulling it mid dispute would
+// dodge a pending ruling. A slashed bond halts here forever (state gate).
+BEAM_EXPORT void Method_28(const Idios::WorkerReclaim& args) {
+    Idios::WorkerBondRec wb;
+    Env::Halt_if(!LoadWorkerBond(args.worker_pk, wb));
+    Env::Halt_if(wb.state != 1);        // must be deregistering (never slashed)
+    Env::Halt_if(wb.encumbrances != 0); // no open encumbered disputes
+
+    Idios::Params params;
+    Env::Halt_if(!LoadParams(params));
+    Env::Halt_if(Env::get_Height() <= wb.dereg_block + params.arbitrator_timeout_blocks);
+
+    Env::AddSig(args.worker_pk);
+    Env::FundsUnlock(0, wb.stake);
+    wb.stake = 0;
+    wb.state = 2; // gone
+    SaveWorkerBond(args.worker_pk, wb);
+}
+
+// Method_29: treasury pulls a slashed bond out of the contract. MUST wait for
+// encumbrances == 0 (fuzzer found rule, resume 68 rule 125): sweeping early
+// frees the identity to re bond while an old dispute still holds an
+// encumbrance, and that dispute's termination would then hit the fresh
+// innocent bond. After the sweep the identity is gone and may bond again; the
+// slash stays visible in the job and log history for the score reader.
+BEAM_EXPORT void Method_29(const Idios::SlashSweep& args) {
+    Idios::WorkerBondRec wb;
+    Env::Halt_if(!LoadWorkerBond(args.worker_pk, wb));
+    Env::Halt_if(wb.state != 3);        // must be slashed
+    Env::Halt_if(wb.encumbrances != 0); // every encumbered dispute terminated
+
+    Idios::Params params;
+    Env::Halt_if(!LoadParams(params));
+    Env::AddSig(params.treasury_pk);
+
+    Env::FundsUnlock(0, wb.stake);
+    wb.stake = 0;
+    wb.state = 2; // gone
+    SaveWorkerBond(args.worker_pk, wb);
+}
+
 // ---- Upgradable3 version callbacks ----------------------------------------
-// g_CurrentVersion bumped 0 -> 1 for the M of N in place upgrade. OnUpgraded
-// enforces a single step: an upgrade from v0 must pass nPrevVersion == 0.
+// g_CurrentVersion bumped 1 -> 2 for the registry hardening plus worker bond
+// in place upgrade. OnUpgraded enforces a single step: an upgrade to v2 must
+// pass nPrevVersion == 1.
 namespace Upgradable3 {
 
-    static const uint32_t g_CurrentVersion = 1;
+    static const uint32_t g_CurrentVersion = 2;
 
     uint32_t get_CurrentVersion() {
         return g_CurrentVersion;
