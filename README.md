@@ -68,9 +68,10 @@ Idios uses a two phase claim pattern. Authorisation steps (approve, claim_after_
 
 **Live on Beam mainnet** ✅
 
-- M of N v1 contract (Upgradable3, in place upgrades) on cid 41ef8be5. Originally deployed as v6 at block 3905992 (15 June 2026), upgraded in place to M of N v1 at block 3914637 (21 June 2026)
-- M of N arbitration live: global arbitrator registry, voting based dispute resolution (N is 1 today)
-- Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds
+- v2 contract (Upgradable3, in place upgrades) on cid 41ef8be5. Originally deployed as v6 at block 3905992 (15 June 2026), upgraded in place to M of N v1 at block 3914637 (21 June 2026), upgraded in place again to v2 at block 3938963 (8 July 2026)
+- M of N arbitration live: global arbitrator registry, voting based dispute resolution (N is 1 today). Registration hardened in v2: BEAM only, 10 BEAM minimum stake, admin co signed
+- Worker reputation bonds live (v2): a worker can lock a standing slashable bond; losing an arbitrated dispute slashes it to the treasury
+- Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds, and the full v2 slash lifecycle (bond, encumbrance, slash, treasury sweep) proven on mainnet before the production upgrade
 - Dapp 3.3.0 published, supports both modes via UI
 
 **Verified resolution paths (real funds on mainnet during development; the job IDs below are from the v5 and v6 deployments that preceded the in place M of N upgrade):**
@@ -90,8 +91,9 @@ Idios uses a two phase claim pattern. Authorisation steps (approve, claim_after_
 
 ```
 CID: 41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f
-Current version: M of N v1 (SID 0b87c61b), upgraded in place from v6 on 21 June 2026 at block 3914637
-Deployed at block: 3905992 (original v6 deploy; cid unchanged across the Upgradable3 upgrade)
+Current version: v2 (SID a61f3a93), upgraded in place from M of N v1 on 8 July 2026 at block 3938963
+Version history: v6 (deploy) -> M of N v1 (21 June 2026, block 3914637) -> v2 (8 July 2026, block 3938963); cid unchanged throughout
+Deployed at block: 3905992 (original v6 deploy; cid unchanged across all Upgradable3 upgrades)
 Constructor params: default_review_window=10080, arbitrator_timeout_blocks=20160, upgrade_delay=1440, min_approvers=1
 Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f
 ```
@@ -100,10 +102,10 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f
 
 | Role | Description |
 |------|-------------|
-| `user` | Requester (Alice) or worker (Bob) interacting with the contract lifecycle |
-| `arbitrator` | Member of the M of N arbitrator registry. Registers with a stake, votes on disputed contracts, and claims a reward share |
+| `user` | Requester (Alice) or worker (Bob) interacting with the contract lifecycle. Workers can also hold a reputation bond (v2). |
+| `arbitrator` | Member of the M of N arbitrator registry. Registers with a stake (BEAM only, 10 BEAM minimum, admin co signed in v2), votes on disputed contracts, and claims a reward share |
 | `manager` | Deploy and view contract params (one-shot, used during contract setup) |
-| `treasury` | Protocol treasury, set at deploy from the deploying wallet. Collects forfeited worker collateral from Active refunds and dispute fees from voided disputes via `sweep`. |
+| `treasury` | Protocol treasury, set at deploy from the deploying wallet. Collects forfeited worker collateral from Active refunds, dispute fees from voided disputes, and slashed worker bonds (v2) via `sweep` and `slash_sweep`. |
 
 ### Actions per role
 
@@ -124,13 +126,18 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f
 | `void_claim_requester` | Requester reclaims their payment from a Voided contract. |
 | `void_claim_node` | Worker reclaims their collateral from a Voided contract. |
 | `view_job` | Read current job state. |
+| `view_dispute` | Read the M of N dispute record for a job: frozen N and threshold, tallies, resolution, and whether the worker's bond is encumbered by it (v2). |
+| `worker_register` | Lock a standing reputation bond (v2). BEAM only, any amount, keyed to the worker's contract pubkey. Slashable: losing an arbitrated dispute forfeits the whole bond to the treasury. |
+| `worker_deregister` | Begin withdrawing the reputation bond. Starts the reclaim cooldown. |
+| `worker_reclaim` | Recover the bond in full after the cooldown (= `arbitrator_timeout_blocks`). Halts while any open dispute encumbers the bond, and forever if the bond was slashed. |
+| `view_worker_bond` | Read a worker bond: stake, state, encumbrance count. Defaults to your own key; pass `worker_pk` to inspect another worker's bond. |
 | `get_key` | Returns the user's pubkey for this contract. (Worker shares this with requester before create.) |
 
-**arbitrator actions** (M of N v1)
+**arbitrator actions** (M of N, v2 hardened registry)
 
 | Action | Description |
 |--------|-------------|
-| `register` | Join the global arbitrator registry, posting a `stake` (sybil resistance only, not slashed in v1). Optional `arb_index` (default 0) derives a distinct key per slot. |
+| `register` | Join the global arbitrator registry, posting a `stake`. v2 gates: BEAM only, 10 BEAM minimum, and the kernel carries the protocol admin's co signature (registration is curated until arbitrator slashing ships). A fully exited identity may register again. Optional `arb_index` (default 0) derives a distinct key per slot. |
 | `vote` | Vote on a Disputed contract. `side` 0 awards the requester (Alice), 1 awards the worker (Bob). Resolves when M matching votes land. |
 | `claim_reward` | After a dispute resolves, a consensus voter claims their share of the dispute fee (`dispute_fee / M`, remainder swept to treasury). |
 | `deregister` | Leave the registry. Starts the stake reclaim cooldown. |
@@ -144,6 +151,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f
 | Action | Description |
 |--------|-------------|
 | `sweep` | Collects forfeited funds: worker collateral from a Refunded contract that went through the Active path, or the dispute fee from a Voided contract. |
+| `slash_sweep` | Collects a slashed worker reputation bond (v2). Waits until every open dispute that encumbered the bond has terminated. |
 | `get_key` | Returns the treasury's pubkey for this contract. |
 
 ### Status codes
@@ -196,7 +204,7 @@ The Beam CLI wallet drives the contract directly. Useful for scripting, building
 - A copy of `idios_app.wasm` (downloadable from this repo or built from source, see [Build](#build))
 - A Beam mainnet node to connect to. Run your own, or use a public node like `eu-node01.mainnet.beam.mw:8100`.
 
-All examples use the live Idios contract on Beam Mimblewimble mainnet (`cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f`) and a public node. The contract is M of N v1, upgraded in place from v6 via Upgradable3 on 21 June 2026, so the cid is unchanged and every user side call (create, commit, submit_delivery, approve, dispute, claim, refund) is byte identical to before. Substitute your own node or cid as needed.
+All examples use the live Idios contract on Beam Mimblewimble mainnet (`cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f`) and a public node. The contract is v2, upgraded in place via Upgradable3 (v6 to M of N v1 on 21 June 2026, then to v2 on 8 July 2026), so the cid is unchanged and every user side call (create, commit, submit_delivery, approve, dispute, claim, refund) is byte identical to before. Substitute your own node or cid as needed.
 
 ### Get worker pubkey for this contract
 
@@ -279,14 +287,15 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-### Arbitrator: register, vote, and claim reward (M of N v1)
+### Arbitrator: register, vote, and claim reward (M of N)
 
-Disputes resolve by M of N voting. Arbitrators join a global registry with a standing stake, vote on disputed contracts, and claim a reward share once consensus is reached. The stake is sybil resistance only and is not slashed in v1. `arb_index` is optional on every arbitrator call and defaults to 0; each index derives a distinct key, so one wallet can run several indices. Stake is in groth (1 BEAM = 100,000,000 groth); `stake=1000000` is 0.01 BEAM, the live registration amount on production today.
+Disputes resolve by M of N voting. Arbitrators join a global registry with a standing stake, vote on disputed contracts, and claim a reward share once consensus is reached. The stake is never slashed; it is sybil resistance and skin in the game. In v2 registration is gated: the bond must be BEAM, at least 10 BEAM (`stake=1000000000`), and the registration kernel must also carry the protocol admin's signature, so joining the registry is curated until arbitrator slashing ships (contact below to register). The single pre v2 registration on production is grandfathered. `arb_index` is optional on every arbitrator call and defaults to 0; each index derives a distinct key, so one wallet can run several indices. Stake is in groth (1 BEAM = 100,000,000 groth).
 
 ```bash
-# Register as an arbitrator (one time, posts the stake)
+# Register as an arbitrator (one time, posts the stake; v2 requires 10 BEAM minimum
+# and the admin co signature in the same kernel)
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=arbitrator,action=register,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,stake=1000000,asset_id=0" \
+  --shader_args="role=arbitrator,action=register,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,stake=1000000000" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 
 # View the registry (current arbitrator count and your index)
@@ -318,6 +327,35 @@ Disputes resolve by M of N voting. Arbitrators join a global registry with a sta
 
 Each arbitrator slot has a distinct pubkey, derived via `MofnArbKeyID { tag 'N', ctx 1, m_Idx }`. Run `action=get_mofn_key` with the relevant `arb_index` to read yours.
 
+### Worker reputation bond (v2)
+
+A worker can lock a standing, slashable bond against their contract pubkey, the same key that takes jobs. The bond is the on chain half of Idios reputation: it costs nothing to hold if you work honestly (reclaimed in full on exit), and losing an arbitrated dispute forfeits the whole bond to the treasury. Any amount, BEAM only; an off chain score reader surfaces the bond size, so dust bonds advertise themselves.
+
+Mechanics: filing a dispute on a job whose worker holds a live bond encumbers the bond, which blocks reclaim until that dispute terminates, so a worker cannot deregister mid dispute and dodge a pending ruling. A quorum resolution to the requester slashes the whole bond (at most once); a resolution to the worker, or a dispute that voids on arbitrator timeout, releases the encumbrance and leaves the bond untouched. A bond registered after a dispute was filed is not at risk from that dispute. The full lifecycle, bond, encumbrance, slash, blocked reclaim, and treasury sweep, is proven with real funds on mainnet.
+
+```bash
+# Lock a reputation bond (any amount in groth, BEAM only)
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=worker_register,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,stake=<GROTH>" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+
+# Read a bond (defaults to your own key; add worker_pk=<PUBKEY> to inspect another worker)
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=view_worker_bond,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+
+# Exit: deregister, wait out the cooldown (= arbitrator_timeout_blocks), reclaim in full
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=worker_deregister,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+
+./beam-wallet shader --shader_app_file=idios_app.wasm \
+  --shader_args="role=user,action=worker_reclaim,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f" \
+  --node_addr=eu-node01.mainnet.beam.mw:8100
+```
+
+Worker bond states: 0 registered, 1 deregistering, 2 gone, 3 slashed. A slashed bond can never be reclaimed; the treasury collects it with `role=treasury,action=slash_sweep,worker_pk=<PUBKEY>` once every encumbering dispute has terminated, after which the identity may bond again from scratch (the slash stays visible in job history).
+
 ### Claim funds (beneficiary)
 
 After a contract reaches Settled, ResolvedToAlice, or ResolvedToBob, the beneficiary calls `claim`. The contract reads payment and collateral from the job state, so no payout amount is passed.
@@ -328,7 +366,7 @@ After a contract reaches Settled, ResolvedToAlice, or ResolvedToBob, the benefic
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-The beneficiary receives `payment + collateral` in all three cases. In M of N v1 the dispute fee does not go to the winner of a dispute; it is split across the consensus voters via `claim_reward` (see the arbitrator section), with any remainder swept to treasury.
+The beneficiary receives `payment + collateral` in all three cases. Under M of N arbitration the dispute fee does not go to the winner of a dispute; it is split across the consensus voters via `claim_reward` (see the arbitrator section), with any remainder swept to treasury.
 
 ### Refund (requester, after expiry)
 
@@ -364,7 +402,7 @@ The contract and app shaders are written in C++ and built with the Beam Shader S
 bash build_v2.sh
 ```
 
-Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
+Produces `idios_contract.wasm` (~11 KB) and `idios_app.wasm` (~28 KB).
 
 ---
 
@@ -376,9 +414,11 @@ Produces `idios_contract.wasm` (~4.5 KB) and `idios_app.wasm` (~11 KB).
 
 **Talking to the other party.** Every party in a contract already runs a Beam wallet, and the wallet has private messaging built in, so requester, worker, and arbitrator can coordinate directly with no outside app. Open it from the account menu at the top right, then Beam Messenger. To start a chat click New chat, paste the other party's Beam messaging address into the Address field, give them a name, and add them. Type your message and press ctrl+enter, command+enter on a Mac, or click Send on the right, to send. Your own messaging address, the one you hand out so others can reach you, is the My address shown in that same New chat dialog. Messages travel wallet to wallet over Beam's SBBS layer and are never posted on chain. Dispute resolution still goes through the arbitrator above, this is for coordinating with your counterparty.
 
-**M of N arbitration (live).** The contract holds a global arbitrator registry, each slot backed by a standing stake. Filing a dispute freezes N (the registry size at filing time) and M (= N/2 + 1) into that dispute, and only arbitrators registered at or before the filing block may vote. The contract resolves when M matching votes land. Consensus voters split the dispute fee (`dispute_fee / M` each, remainder to treasury); arbitrators never receive the winning party's funds. The stake is sybil resistance only and is not slashed in v1.
+**M of N arbitration (live).** The contract holds a global arbitrator registry, each slot backed by a standing stake. Filing a dispute freezes N (the registry size at filing time) and M (= N/2 + 1) into that dispute, and only arbitrators registered at or before the filing block may vote. The contract resolves when M matching votes land. Consensus voters split the dispute fee (`dispute_fee / M` each, remainder to treasury); arbitrators never receive the winning party's funds. The arbitrator stake is never slashed; since v2, registration is gated (BEAM only, 10 BEAM minimum, admin co signed) so the registry cannot be captured by dust bonds.
 
-Today N is 1, a single registered arbitrator (contact below). Registering more independent arbitrators is the immediate next step and is open to anyone willing to post the stake. The dapp, MCP server, and agent daemon still carry the older single arbitrator console; since the escrow flow is byte identical across the upgrade nothing there breaks, and the arbitrator surface rework (register, vote, claim_reward via UI and MCP) is deferred until external arbitrators need it. The CLI path above works today.
+Today N is 1, a single registered arbitrator (contact below). Registering more independent arbitrators is the immediate next step; registration takes a 10 BEAM stake and is admin co signed (curated) until arbitrator slashing ships, so reach out via the contact above to join. The dapp, MCP server, and agent daemon still carry the older single arbitrator console; since the escrow flow is byte identical across the upgrade nothing there breaks, and the arbitrator surface rework (register, vote, claim_reward via UI and MCP) is deferred until external arbitrators need it. The CLI path above works today.
+
+**Worker reputation bond (v2).** A worker can lock a standing slashable bond keyed to their contract pubkey. Filing a dispute encumbers a live bond (blocking reclaim until the dispute terminates), a quorum resolution against the worker slashes the whole bond to the treasury, and a resolution for the worker or a void releases it untouched. The treasury sweep of a slashed bond waits until every dispute that encumbered it has terminated, so an old dispute can never touch a freshly re registered bond. This is the on chain half of Idios reputation; the off chain score reader is the next piece.
 
 **Contract-specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
 
@@ -413,6 +453,7 @@ This roadmap is partner-driven. Phase 0 is live on mainnet. Phase 1 is the next 
 **Phase 0 (shipped): live on mainnet**
 
 - [x] M of N v1 contract on Beam mainnet (cid `41ef8be5...`), upgraded in place from v6 via Upgradable3 on 21 June 2026: global arbitrator registry, voting based dispute resolution, stake based sybil resistance
+- [x] v2 upgrade, in place via Upgradable3 on 8 July 2026 (block 3938963): hardened arbitrator registration (BEAM only, 10 BEAM floor, admin co sign) and slashable worker reputation bonds, full slash lifecycle proven on mainnet
 - [x] Both Hash verified (Mode A) and Reviewed (Mode B) settlement
 - [x] Four Mode B resolution paths verified end to end on mainnet: approve, dispute to either side, review timeout, arbitrator timeout void
 - [x] Worker collateral floor, mutual cancel, and review window fallback (the v5 surgical set)
@@ -422,10 +463,10 @@ This roadmap is partner-driven. Phase 0 is live on mainnet. Phase 1 is the next 
 
 **Phase 1 (next): real decentralization and reputation**
 
-- [ ] Register more arbitrators. N is 1 today; adding two more independently held keys, run by separate operators, gives a real 2 of 3 quorum. Open to anyone willing to post the stake. CLI works now, surface rework comes later
+- [ ] Register more arbitrators. N is 1 today; adding two more independently held keys, run by separate operators, gives a real 2 of 3 quorum. Takes a 10 BEAM stake and admin co sign (curated until slashing ships), reach out to join. CLI works now, surface rework comes later
 - [ ] Arbitrator surface rework. Dapp arbitrator console, MCP server arbitrator tools, and agent daemon arbitrator role rewired from the retired resolve methods to register, vote, and claim_reward. Deferred until external arbitrators need a UI; CLI is the path today
 - [ ] Arbitrator slashing. The stake in v1 is sybil resistance only. Slashing arbitrators who vote against consensus is the next contract upgrade, in place via Upgradable3
-- [ ] Privacy preserving reputation. Worker bond and slash as an in place upgrade, an off chain score reader, and a paid handle via Beam NameService so reputation attaches to a public handle without leaking transaction history
+- [ ] Privacy preserving reputation. The worker bond and slash shipped in v2; what remains is the off chain score reader and a paid handle via Beam NameService so reputation attaches to a public handle without leaking transaction history
 
 **Phase 2: payload delivery and larger deliverables**
 
