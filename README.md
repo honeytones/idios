@@ -54,9 +54,9 @@ For non deterministic or open ended work where the requester needs to review the
    - **Approves**, allowing the worker to claim payment + collateral.
    - **Disputes**, locking the dispute fee and pushing the case to arbitration.
    - **Does nothing** until the review window expires, after which the worker can claim payment + collateral via timeout.
-5. If disputed, an on-chain arbitrator resolves to either party. Winner claims the full pot (payment + collateral + dispute fee).
+5. If disputed, the M of N arbitrator registry resolves to either party by voting. The winner claims payment + collateral. The dispute fee pays the consensus voting arbitrators, never the winner.
 
-Funds always flow to the right party. The arbitrator can decide who wins a dispute but never receives the funds themselves.
+Funds always flow to the right party. Arbitrators decide who wins a dispute and earn the dispute fee for the work of judging it, but never touch the payment or collateral.
 
 ### Two phase claim
 
@@ -120,7 +120,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f
 | `approve` | Requester approves Mode B delivery, status moves to Settled (no funds yet). |
 | `dispute` | Requester disputes Mode B delivery, locks dispute fee, status moves to Disputed. |
 | `claim_after_timeout` | Worker claims after review window expires (Mode B), status moves to Settled. |
-| `claim` | Beneficiary collects funds from a Settled, ResolvedToBob, or ResolvedToAlice contract. Status moves to Closed. Mode A contracts pay out automatically and cannot be claimed. |
+| `claim` | Beneficiary collects funds (payment + collateral) from a Settled, ResolvedToBob, or ResolvedToAlice contract. A Settled claim moves the status to Closed. A Resolved contract keeps its 6/7 status forever; the `winner_paid` flag in `view_dispute` records the payout. Mode A contracts pay out automatically and cannot be claimed. |
 | `refund` | Requester reclaims their payment from an expired contract (Open or Active). On the Active path the worker's collateral is forfeited to the treasury. Status moves to Refunded. |
 | `void_dispute` | Permissionless. Anyone can void a dispute the arbitrator never resolved, once `arbitrator_timeout_blocks` have passed since it was filed. Status moves to Voided. |
 | `void_claim_requester` | Requester reclaims their payment from a Voided contract. |
@@ -163,10 +163,11 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f
 3 = Disputed           (Mode B, requester has disputed, awaiting arbitrator)
 4 = Settled            (beneficiary can claim, payment + collateral)
 5 = Refunded           (terminal, requester reclaimed funds after expiry)
-6 = ResolvedToAlice    (arbitrator sided with requester, requester can claim)
-7 = ResolvedToBob      (arbitrator sided with worker, worker can claim)
+6 = ResolvedToAlice    (arbitrators sided with requester, requester can claim; stays 6 after the claim, winner_paid in view_dispute records it)
+7 = ResolvedToBob      (arbitrators sided with worker, worker can claim; stays 7 after the claim, winner_paid in view_dispute records it)
 8 = Closed             (terminal, claim has been collected)
-9 = Voided             (terminal, arbitrator never resolved a dispute in time, parties reclaim)
+9 = Voided             (terminal, arbitrators never resolved a dispute in time, parties reclaim)
+10 = Cancelled         (terminal, both parties agreed to cancel, everyone made whole in the cancel tx)
 ```
 
 ---
@@ -362,7 +363,7 @@ After a contract reaches Settled, ResolvedToAlice, or ResolvedToBob, the benefic
 
 ```bash
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=claim,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,asset_id=0" \
+  --shader_args="role=user,action=claim,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -374,7 +375,7 @@ For an Open contract whose `expiry_block` has passed without anyone committing.
 
 ```bash
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=refund,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=refund,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -390,6 +391,8 @@ idios_contract.wasm    Compiled contract (loaded on chain at deploy)
 idios_app.wasm         Compiled app shader (used by wallet to construct kernels)
 build_v2.sh            Build script
 idios-dapp-src/        Mirror of the dapp source (BeamMW template fork)
+idios-mcp-server/      MCP server exposing contract actions as agent tools
+idios-agent-daemon/    Daemon automating the worker and client roles
 ```
 
 ---
@@ -416,7 +419,7 @@ Produces `idios_contract.wasm` (~11 KB) and `idios_app.wasm` (~28 KB).
 
 **M of N arbitration (live).** The contract holds a global arbitrator registry, each slot backed by a standing stake. Filing a dispute freezes N (the registry size at filing time) and M (= N/2 + 1) into that dispute, and only arbitrators registered at or before the filing block may vote. The contract resolves when M matching votes land. Consensus voters split the dispute fee (`dispute_fee / M` each, remainder to treasury); arbitrators never receive the winning party's funds. The arbitrator stake is never slashed; since v2, registration is gated (BEAM only, 10 BEAM minimum, admin co signed) so the registry cannot be captured by dust bonds.
 
-Today N is 1, a single registered arbitrator (contact below). Registering more independent arbitrators is the immediate next step; registration takes a 10 BEAM stake and is admin co signed (curated) until arbitrator slashing ships, so reach out via the contact above to join. The dapp, MCP server, and agent daemon still carry the older single arbitrator console; since the escrow flow is byte identical across the upgrade nothing there breaks, and the arbitrator surface rework (register, vote, claim_reward via UI and MCP) is deferred until external arbitrators need it. The CLI path above works today.
+Today N is 1, a single registered arbitrator (contact below). Registering more independent arbitrators is the immediate next step; registration takes a 10 BEAM stake and is admin co signed (curated) until arbitrator slashing ships, so reach out via the contact above to join. The MCP server and agent daemon are on the v2 surface (M of N payout amounts, worker bond tools, dispute view); voting itself is deliberately a human CLI action, never an agent tool, so an agent can never rule on a dispute. The dapp still carries the older single arbitrator console; since the escrow flow is byte identical across the upgrade nothing there breaks, and the dapp arbitrator rework (register, vote, claim_reward via UI) is deferred until external arbitrators need it. The CLI path above works today.
 
 **Worker reputation bond (v2).** A worker can lock a standing slashable bond keyed to their contract pubkey. Filing a dispute encumbers a live bond (blocking reclaim until the dispute terminates), a quorum resolution against the worker slashes the whole bond to the treasury, and a resolution for the worker or a void releases it untouched. The treasury sweep of a slashed bond waits until every dispute that encumbered it has terminated, so an old dispute can never touch a freshly re registered bond. This is the on chain half of Idios reputation; the off chain score reader is the next piece.
 
@@ -430,17 +433,24 @@ Today N is 1, a single registered arbitrator (contact below). Registering more i
 
 ---
 
+## Run an AI agent on Idios
+
+`idios-mcp-server/` exposes every contract action as MCP tools, so any MCP capable agent framework (Claude Code, LangGraph, CrewAI, AutoGen) can create, work, settle, and dispute private escrow contracts in plain language. Twenty two tools cover the full lifecycle: creation in both modes, collateral, delivery, approval, disputes with a live vote view, claims with a double claim guard, recovery paths, and the v2 worker reputation bond. Voting on disputes is deliberately not an agent tool, so an agent can never rule in its own favour.
+
+Start with [`idios-mcp-server/QUICKSTART.md`](./idios-mcp-server/QUICKSTART.md): from nothing to an agent settled contract on mainnet.
+
+---
+
 ## Agent runtime daemon
 
 `idios-agent-daemon/` in this repo is a small Python daemon that automates your role in an Idios contract. Polls the chain, watches your tracked contracts, fires the right contract call when the state machine advances. Run on your own machine alongside a Beam CLI wallet, type the password once at startup, walk away.
 
-Supports all three Idios roles:
+Supports the two party roles:
 
-- **Worker** commit, submit_delivery, claim.
-- **Client** hash-match auto-approve, claim on dispute won or refund.
-- **Arbitrator**: hash-match auto-vote in Mode B disputes (vote for the worker on a match, the requester on a mismatch). This daemon path is being migrated from the retired single-arbitrator resolve to M of N voting; the worker and client roles are unaffected.
+- **Worker** commit, submit_delivery, claim (including a won dispute, guarded by the on chain winner_paid flag so a paid claim is never retried).
+- **Client** hash-match auto-approve, optional auto refund after expiry, claim on a won dispute.
 
-The daemon automates all three roles and has been exercised end to end on Beam mainnet, including the dispute and arbitrator timeout recovery paths.
+Both roles also void a stale dispute once the arbitrator timeout passes and reclaim their side from a Voided contract. There is no arbitrator role: dispute resolution is M of N voting by humans over the CLI, never automated.
 
 The dapp's My Contracts page has an **Automate this contract** button on each tracked contract card that generates a daemon config snippet you can paste straight into the daemon's config. See [`idios-agent-daemon/README.md`](./idios-agent-daemon/README.md) for setup and configuration.
 
@@ -459,12 +469,12 @@ This roadmap is partner-driven. Phase 0 is live on mainnet. Phase 1 is the next 
 - [x] Worker collateral floor, mutual cancel, and review window fallback (the v5 surgical set)
 - [x] Dapp 3.3.0 (still on the v6 escrow surface, byte identical so unaffected; arbitrator surface rework deferred)
 - [x] BEAM and Nephrite (NPH) settlement, both tested on mainnet, plus any other Beam confidential asset by `asset_id`
-- [x] Explorer parser, agent runtime daemon (worker, requester, arbitrator roles), and in-dapp daemon config export
+- [x] Explorer parser, agent runtime daemon (worker and requester roles), MCP server with the full v2 tool set, and in-dapp daemon config export
 
 **Phase 1 (next): real decentralization and reputation**
 
 - [ ] Register more arbitrators. N is 1 today; adding two more independently held keys, run by separate operators, gives a real 2 of 3 quorum. Takes a 10 BEAM stake and admin co sign (curated until slashing ships), reach out to join. CLI works now, surface rework comes later
-- [ ] Arbitrator surface rework. Dapp arbitrator console, MCP server arbitrator tools, and agent daemon arbitrator role rewired from the retired resolve methods to register, vote, and claim_reward. Deferred until external arbitrators need a UI; CLI is the path today
+- [ ] Dapp arbitrator console rework: register, vote, and claim_reward via UI, replacing the retired single arbitrator resolve view. The MCP server and agent daemon moved to the v2 surface in July 2026 (M of N payout amounts, worker bond tools, dispute view; the retired resolve flow removed). Deferred until external arbitrators need a UI; CLI is the path today
 - [ ] Arbitrator slashing. The stake in v1 is sybil resistance only. Slashing arbitrators who vote against consensus is the next contract upgrade, in place via Upgradable3
 - [ ] Privacy preserving reputation. The worker bond and slash shipped in v2; what remains is the off chain score reader and a paid handle via Beam NameService so reputation attaches to a public handle without leaking transaction history
 

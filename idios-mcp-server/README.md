@@ -24,9 +24,8 @@ at the protocol level. No platform takes a cut.
 
 - Python 3.10+
 - Beam CLI wallet binary on disk
-- Idios app shader (idios_app.wasm) on disk
+- Idios app shader (idios_app.wasm) on disk, current v2 build from this repo
 - A funded wallet.db
-- Node 22+ (for Wrangler if needed, otherwise just Python)
 
 Install the MCP SDK:
 
@@ -40,12 +39,13 @@ Copy idios_mcp_config.example.json to idios_mcp_config.json and fill in your pat
       "beam_wallet_binary": "/home/you/beam-cli/beam-wallet",
       "shader_app_file": "/path/to/idios_app.wasm",
       "wallet_path": "/home/you/beam-cli/wallet.db",
-      "node_addr": "127.0.0.1:10005",
-      "cid": "ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb"
+      "node_addr": "eu-node01.mainnet.beam.mw:8100",
+      "cid": "41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f"
     }
 
-node_addr of 127.0.0.1:10005 is the embedded node inside Beam Desktop wallet.
-If Beam Desktop is not running, use a public mainnet node like eu-node01.mainnet.beam.mw:8100.
+The cid above is the live Idios v2 contract on Beam mainnet. eu-node01 is a
+public mainnet node; run your own for anything serious. If Beam Desktop is
+running locally its embedded node is at 127.0.0.1:10005.
 
 ## Running
 
@@ -105,10 +105,24 @@ plaintext. Fine on a machine you control, but know the tradeoff.
 | commit_collateral | worker | Lock collateral to activate contract |
 | submit_delivery | worker | Submit delivery hash, auto-settles Mode A on match |
 | approve_delivery | requester | Approve Mode B delivery, worker can then claim |
-| dispute_delivery | requester | Dispute Mode B delivery, routes to arbitrator |
-| claim_funds | either | Claim from a Settled or Resolved (dispute) contract |
+| dispute_delivery | requester | Dispute Mode B delivery, locks the dispute fee, routes to arbitrator voting |
+| view_dispute | any | Read a dispute record: vote tallies, resolution, winner_paid, bond encumbrance |
+| claim_funds | either | Claim payment + collateral from a Settled or Resolved contract; guards against double claims via winner_paid |
 | claim_after_timeout | worker | Claim after requester goes silent past review window |
-| refund_contract | requester | Refund expired Open contract (worker never committed) |
+| refund_contract | requester | Refund an expired Open or Active contract (on the Active path the worker collateral forfeits to the treasury) |
+| mutual_cancel | both | Cancel an Active or AwaitingApproval contract by mutual agreement, everyone made whole |
+| void_dispute | anyone | Void a dispute the arbitrators never resolved, once the timeout passes |
+| void_claim_requester | requester | Reclaim the payment from a Voided contract |
+| void_claim_node | worker | Reclaim the collateral from a Voided contract |
+| worker_register | worker | Lock a slashable reputation bond (BEAM only, any amount) |
+| worker_deregister | worker | Start withdrawing the bond, begins the cooldown |
+| worker_reclaim | worker | Recover the bond after the cooldown; halts while encumbered or if slashed |
+| view_worker_bond | any | Read any worker's bond: stake, state, encumbrances |
+| treasury_sweep | treasury | Collect forfeited funds (treasury key only) |
+
+The dispute winner receives payment + collateral. The dispute fee pays the
+consensus voting arbitrators, never either party. Voting is deliberately not
+an agent tool; disputes are resolved by humans over the CLI.
 
 ## Amount units
 
@@ -128,5 +142,5 @@ your role, and a description of the situation.
 
 ## Live contract
 
-CID: ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb
-Deployed on Beam mainnet since May 2, 2026.
+CID: 41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f
+Live on Beam mainnet, v2 via in place Upgradable3 upgrades (original deploy 15 June 2026, v2 since 8 July 2026).
