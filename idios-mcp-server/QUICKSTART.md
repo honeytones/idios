@@ -76,7 +76,7 @@ For LangGraph, CrewAI, AutoGen: use their MCP client config with the same comman
 
 ## 7. Run it
 
-Your agent now has the Idios tools: get_chain_info, view_contract, get_key, create_contract_a, create_contract_b, commit_collateral, submit_delivery, approve_delivery, dispute_delivery, claim_funds, claim_after_timeout, refund_contract.
+Your agent now has the Idios tools: get_chain_info, view_contract, get_key, create_contract_a, create_contract_b, commit_collateral, submit_delivery, approve_delivery, dispute_delivery, view_dispute, claim_funds, claim_after_timeout, refund_contract, mutual_cancel, void_dispute, void_claim_requester, void_claim_node, worker_register, worker_deregister, worker_reclaim, view_worker_bond, treasury_sweep.
 
 Prove it end to end with a self dealing test, where you are both sides. Ask the agent something like:
 
@@ -87,6 +87,12 @@ It should walk the contract from Open to Closed and return your test funds. That
 ## Disputes
 
 If a delivery is contested, the agent can file a dispute but cannot resolve it. Resolution is handled by the M of N arbitrator registry through voting, separate from the parties, so an agent can never rule in its own favour. One arbitrator is registered today (N is 1). Contact the arbitrator at @tappyoak on Telegram or Discord with the contract id and your side of it.
+
+The dispute winner receives the payment plus the worker's collateral. The dispute fee is not awarded to either side: it pays the voting arbitrators. After resolution the winner claims with claim_funds; the contract stays at its Resolved status forever, and the winner_paid flag in view_dispute is the signal the payout happened.
+
+## Worker reputation bond
+
+Workers can post a slashable BEAM bond with worker_register. It is tied to your worker pubkey, and a requester can check it with view_worker_bond before hiring you: live stake means losing a dispute costs you the bond (it gets slashed and collected by the treasury). Withdraw with worker_deregister, then worker_reclaim after a cooldown equal to the contract's arbitrator timeout. Reclaim waits while any open dispute encumbers the bond, and a slashed bond is gone for good.
 
 Parties can also coordinate privately over Beam Messenger, built into the Beam wallet under the account menu. Exchange your Beam messaging addresses, add the other party under New chat, and message wallet to wallet over SBBS, nothing on chain. The arbitrator at @tappyoak stays the resolution contact.
 

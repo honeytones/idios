@@ -10,7 +10,7 @@ Worker role:
     status=Active        -> fire submit_delivery (pre-configured delivery_hash)
                             Mode A auto-settles to Closed at delivery, no claim.
     status=Settled       -> fire claim (Mode B approve path)
-    status=ResolvedToBob -> fire claim (won dispute)
+    status=ResolvedToBob -> fire claim (won dispute, payout is payment + collateral)
     status=Disputed      -> fire void_dispute once past the arbitrator timeout
     status=Voided        -> fire void_claim_node to reclaim collateral
     status=Cancelled     -> terminal; mutual cancel pays out in the cancel tx
@@ -18,13 +18,18 @@ Worker role:
 Client role (all auto actions are config gated):
     status=Open/Active   -> fire refund after expiry (auto_refund_after_expiry)
     status=AwaitingApproval -> fire approve on hash match (auto_approve_on_hash_match)
-    status=ResolvedToAlice  -> fire claim (won dispute)
+    status=ResolvedToAlice  -> fire claim (won dispute, payout is payment + collateral)
     status=Disputed      -> fire void_dispute once past the arbitrator timeout
     status=Voided        -> fire void_claim_requester to reclaim payment
-    status=Refunded      -> terminal; v4 refund returns funds in its own tx.
+    status=Refunded      -> terminal; refund returns funds in its own tx.
     status=Cancelled     -> terminal; mutual cancel pays out in the cancel tx
 
-Arbitrator role handles Disputed only, see handle_arbitrator_job.
+Dispute resolution is arbitrators voting on chain (role=arbitrator,
+action=vote via the CLI). Voting is deliberately not automated here: the
+daemon never resolves disputes, it only waits, claims for the winner, or
+voids a stale dispute past the timeout. The dispute fee goes to the voting
+arbitrators, never to the winner. A Resolved job stays at status 6 or 7
+forever; the winner_paid flag in view_dispute is the only paid signal.
 
 Batch creation (optional):
     A top-level "batches" key in config lets an operator define N Mode B
@@ -140,8 +145,8 @@ def load_config(path):
         for k in ("job_id", "role"):
             if k not in j:
                 raise ValueError("each job needs job_id and role: " + str(j))
-        if j["role"] not in ("worker", "client", "arbitrator"):
-            raise ValueError("role must be worker, client, or arbitrator: " + str(j))
+        if j["role"] not in ("worker", "client"):
+            raise ValueError("role must be worker or client (arbitration is CLI voting, not automated): " + str(j))
     cfg.setdefault("poll_interval_seconds", DEFAULT_POLL_INTERVAL_SECONDS)
 
     # Validate batches if present.
@@ -372,24 +377,17 @@ def shader_refund(cfg, password, job_id, logger):
     return rc == 0
 
 
-def shader_resolve_alice(cfg, password, job_id, total, asset_id, logger):
-    args = "role=arbitrator,action=resolve_alice," + build_args(cfg, [
-        ("job_id", job_id),
-        ("total", total),
-        ("asset_id", asset_id),
-    ])
-    rc, _, _, _ = call_shader(cfg, password, args, logger)
-    return rc == 0
-
-
-def shader_resolve_bob(cfg, password, job_id, total, asset_id, logger):
-    args = "role=arbitrator,action=resolve_bob," + build_args(cfg, [
-        ("job_id", job_id),
-        ("total", total),
-        ("asset_id", asset_id),
-    ])
-    rc, _, _, _ = call_shader(cfg, password, args, logger)
-    return rc == 0
+def shader_view_dispute(cfg, password, job_id, logger):
+    """Read the on chain dispute record for a job. Returns the parsed dict
+    (frozen_n, threshold, vc_alice, vc_bob, resolution, winner_paid,
+    fee_share, fee_remainder, remainder_swept, bond_encumbered) or None.
+    winner_paid is the ONLY signal a Resolved (6/7) job was paid out, since
+    the status stays 6 or 7 forever after the winner claims."""
+    args = "role=manager,action=view_dispute," + build_args(cfg, [("job_id", job_id)])
+    rc, _, _, parsed = call_shader(cfg, password, args, logger)
+    if rc != 0 or parsed is None:
+        return None
+    return parsed.get("dispute") or parsed
 
 
 def shader_void_dispute(cfg, password, job_id, logger):
@@ -588,8 +586,8 @@ def maybe_void_stale_dispute(cfg, password, job_id, job, job_state,
     if job_state.get("void_fired"):
         return
     if not arbitrator_timeout or chain_height is None:
-        logger.info("job %s: Disputed, waiting for arbitrator "
-                    "(auto-void unavailable: no chain height or timeout).", job_id)
+        logger.info("job %s: Disputed, waiting for the arbitrator vote "
+                    "(auto void unavailable: no chain height or timeout).", job_id)
         return
     filed = int(job.get("dispute_filed_block", 0))
     if filed == 0:
@@ -597,7 +595,7 @@ def maybe_void_stale_dispute(cfg, password, job_id, job, job_state,
         return
     deadline = filed + int(arbitrator_timeout)
     if chain_height <= deadline:
-        logger.info("job %s: Disputed, arbitrator can resolve until block %s "
+        logger.info("job %s: Disputed, arbitrators can vote until block %s "
                     "(current %s). Waiting.", job_id, deadline, chain_height)
         return
     logger.info("job %s: dispute stale (deadline block %s, current %s), "
@@ -684,8 +682,20 @@ def handle_worker_job(cfg, password, job_cfg, state, logger,
         return
 
     if status == STATUS_RESOLVED_TO_BOB and not job_state.get("claim_fired"):
-        total = payment + collateral + int(job.get("dispute_fee", 0))
-        logger.info("job %s: dispute resolved to worker, firing claim, total=%s", job_id, total)
+        # A Resolved job stays at status 7 forever, even after the payout.
+        # winner_paid from view_dispute is the only paid signal, so check it
+        # before firing a claim that would halt on chain (protects against a
+        # lost state file or a claim made outside this daemon).
+        dispute = shader_view_dispute(cfg, password, job_id, logger)
+        if dispute is not None and int(dispute.get("winner_paid", 0)) == 1:
+            job_state["claim_fired"] = True
+            logger.info("job %s: dispute payout already claimed (winner_paid=1), "
+                        "marking done", job_id)
+            return
+        total = payment + collateral
+        logger.info("job %s: dispute resolved to worker, firing claim, total=%s "
+                    "(payment %s + collateral %s, the dispute fee goes to the "
+                    "voting arbitrators)", job_id, total, payment, collateral)
         if shader_claim(cfg, password, job_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok", job_id)
@@ -745,7 +755,6 @@ def handle_client_job(cfg, password, job_cfg, state, logger,
     status = int(job.get("status", -1))
     payment = int(job.get("payment", 0))
     collateral = int(job.get("collateral", 0))
-    dispute_fee = int(job.get("dispute_fee", 0))
     expiry_block = int(job.get("expiry_block", 0))
     delivery_hash = job.get("delivery_hash", "")
     asset_id = int(job.get("asset_id", 0))
@@ -798,10 +807,19 @@ def handle_client_job(cfg, password, job_cfg, state, logger,
         return
 
     if status == STATUS_RESOLVED_TO_ALICE and not job_state.get("claim_fired"):
-        total = payment + collateral + dispute_fee
+        # Status stays 6 forever after the payout; winner_paid is the only
+        # paid signal. Check it before firing a claim that would halt on
+        # chain (protects against a lost state file or an external claim).
+        dispute = shader_view_dispute(cfg, password, job_id, logger)
+        if dispute is not None and int(dispute.get("winner_paid", 0)) == 1:
+            job_state["claim_fired"] = True
+            logger.info("job %s: dispute payout already claimed (winner_paid=1), "
+                        "marking done", job_id)
+            return
+        total = payment + collateral
         logger.info("job %s: dispute resolved to client, firing claim, total=%s "
-                    "(payment %s + collateral %s + dispute_fee %s)",
-                    job_id, total, payment, collateral, dispute_fee)
+                    "(payment %s + collateral %s, the dispute fee goes to the "
+                    "voting arbitrators)", job_id, total, payment, collateral)
         if shader_claim(cfg, password, job_id, logger):
             job_state["claim_fired"] = True
             logger.info("job %s: claim fired ok", job_id)
@@ -831,80 +849,6 @@ def handle_client_job(cfg, password, job_cfg, state, logger,
     # Claim halts on Refunded. Refunded is terminal for the client.
     if status in (STATUS_CLOSED, STATUS_REFUNDED, STATUS_RESOLVED_TO_BOB, STATUS_SETTLED, STATUS_CANCELLED):
         return
-
-
-def handle_arbitrator_job(cfg, password, job_cfg, state, logger):
-    """
-    Arbitrator role: only acts on status=Disputed.
-    Auto-resolves Mode B disputes by comparing chain delivery_hash to
-    config expected_result_hash:
-      match    -> resolve_bob (worker delivered what was agreed)
-      mismatch -> resolve_alice (worker did not deliver)
-    Requires expected_result_hash in config to auto-decide. Without it,
-    or for Mode A jobs (which should not be Disputed in normal flow),
-    logs and surfaces to operator.
-    Total payout includes payment + collateral + dispute_fee (the full pool
-    held by the contract during dispute).
-    """
-    job_id = job_cfg["job_id"]
-    job_state_key = "arbitrator:" + str(job_id)
-    job_state = state.setdefault(job_state_key, {
-        "last_status": None,
-        "resolved": False,
-    })
-
-    job = shader_view_job(cfg, password, job_id, logger)
-    if not job:
-        logger.warning("job %s: view_job failed or no data", job_id)
-        return
-
-    status = int(job.get("status", -1))
-    payment = int(job.get("payment", 0))
-    collateral = int(job.get("collateral", 0))
-    dispute_fee = int(job.get("dispute_fee", 0))
-    delivery_hash = job.get("delivery_hash", "")
-    mode = int(job.get("mode", MODE_A))
-    asset_id = int(job.get("asset_id", 0))
-
-    if job_state.get("last_status") != status:
-        logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
-        job_state["last_status"] = status
-
-    if status != STATUS_DISPUTED:
-        return
-
-    if job_state.get("resolved"):
-        return
-
-    if mode != MODE_B:
-        logger.warning("job %s: Disputed but mode=%s (not Mode B). NOT auto-resolving. "
-                       "Operator should review.", job_id, mode)
-        return
-
-    expected = job_cfg.get("expected_result_hash")
-    if not expected:
-        logger.info("job %s: Disputed, no expected_result_hash in config. "
-                    "Waiting for operator decision.", job_id)
-        return
-
-    total = payment + collateral + dispute_fee
-    if str(expected).lower() == str(delivery_hash).lower():
-        logger.info("job %s: delivery_hash matches expected, resolving to BOB "
-                    "(worker). total=%s", job_id, total)
-        if shader_resolve_bob(cfg, password, job_id, total, asset_id, logger):
-            job_state["resolved"] = True
-            logger.info("job %s: resolve_bob fired ok", job_id)
-        else:
-            logger.error("job %s: resolve_bob failed", job_id)
-    else:
-        logger.warning("job %s: delivery_hash mismatch, chain=%s expected=%s. "
-                       "Resolving to ALICE (requester). total=%s",
-                       job_id, delivery_hash, expected, total)
-        if shader_resolve_alice(cfg, password, job_id, total, asset_id, logger):
-            job_state["resolved"] = True
-            logger.info("job %s: resolve_alice fired ok", job_id)
-        else:
-            logger.error("job %s: resolve_alice failed", job_id)
 
 
 def main():
@@ -992,8 +936,6 @@ def main():
                     elif role == "client":
                         handle_client_job(cfg, password, job_cfg, state, logger,
                                           chain_height, arbitrator_timeout)
-                    elif role == "arbitrator":
-                        handle_arbitrator_job(cfg, password, job_cfg, state, logger)
                 except Exception as e:
                     logger.exception("error handling job %s: %s", job_cfg.get("job_id"), e)
             save_durable_state(state_path, state)

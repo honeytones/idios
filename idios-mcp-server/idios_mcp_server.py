@@ -18,9 +18,13 @@ Config format (idios_mcp_config.json):
       "beam_wallet_binary": "/home/you/beam-cli/beam-wallet",
       "shader_app_file": "/path/to/idios_app.wasm",
       "wallet_path": "/home/you/beam-cli/wallet.db",
-      "node_addr": "127.0.0.1:10005",
-      "cid": "ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb"
+      "node_addr": "eu-node01.mainnet.beam.mw:8100",
+      "cid": "41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f"
     }
+
+The cid above is the live Idios v2 contract on Beam mainnet. shader_app_file
+must point at the repo's current idios_app.wasm (the v2 app shader); an old
+wasm will not know the v2 actions.
 
 The server uses stdio transport, meaning the agent framework starts it as a
 subprocess and communicates via stdin/stdout. This is the standard local MCP
@@ -31,7 +35,8 @@ Notes:
     - State-changing calls (commit, submit_delivery, approve, dispute, claim)
       can take 1-2 minutes to confirm on chain. SHADER_TIMEOUT_SECONDS=600.
     - view_contract is read-only and fast.
-    - The CID in config must match the deployed Idios contract.
+    - The CID in config must match the deployed Idios contract (production v2
+      is 41ef8be5...).
     - expiry_block must be in the future. Use current_block + 50000 for ~7 days.
     - Amounts are in groth. 1 BEAM = 100,000,000 groth. NPH (asset_id=47) same.
 """
@@ -175,6 +180,16 @@ def _view_state(job_id: int):
     return data
 
 
+def _view_dispute_state(job_id: int):
+    """Return the parsed view_dispute dict for a job, or None on failure.
+    Read only, works for any Disputed or Resolved job."""
+    args = "role=manager,action=view_dispute," + _build_args([("job_id", job_id)])
+    ok, parsed, err = _call_shader(args)
+    if not ok or parsed is None or not isinstance(parsed, dict):
+        return None
+    return parsed.get("dispute") or parsed
+
+
 # Initialise FastMCP server.
 mcp = FastMCP(
     "idios",
@@ -187,7 +202,11 @@ mcp = FastMCP(
         "State-changing calls (commit, submit_delivery, approve, dispute, claim) "
         "wait for on-chain confirmation and may take 1-2 minutes. "
         "If a dispute is never resolved within the arbitrator timeout, recover "
-        "funds with void_dispute, then void_claim_requester or void_claim_node."
+        "funds with void_dispute, then void_claim_requester or void_claim_node. "
+        "Disputes are resolved by arbitrators voting on chain; the winner "
+        "receives payment + collateral and the dispute fee goes to the voting "
+        "arbitrators. Workers can post a slashable reputation bond with "
+        "worker_register; check any worker's bond with view_worker_bond."
     )
 )
 
@@ -202,7 +221,7 @@ def view_contract(job_id: int) -> str:
 
     Status values: Open(0), Active(1), AwaitingApproval(2), Disputed(3),
     Settled(4), Refunded(5), ResolvedToAlice(6), ResolvedToBob(7), Closed(8),
-    Voided(9).
+    Voided(9), Cancelled(10).
 
     Use this to check contract state before deciding what action to take.
     This call is read-only and does not require wallet funds.
@@ -322,7 +341,8 @@ def create_contract_b(
         review_window_blocks: How long requester has to approve/dispute after delivery.
             2000 blocks is roughly 33 hours. Pass 0 (or omit) to use the
             contract default set at deploy time.
-        dispute_fee: Amount requester locks if they dispute. Lost if dispute goes against them.
+        dispute_fee: Amount the requester locks if they file a dispute. It pays
+            the voting arbitrators regardless of outcome; neither party gets it back.
         required_collateral: Minimum collateral in groth the worker must commit.
             The contract rejects any commit below this floor. 0 (default) = no floor.
         spec_hash: Optional SHA-256 hash (64 char hex) of the job specification,
@@ -556,16 +576,16 @@ def dispute_delivery(job_id: int) -> str:
     Dispute a delivered Mode B contract as the requester (Alice).
 
     Use this if the deliverable does not meet the agreed specification.
-    Filing a dispute locks the dispute_fee from the contract. An arbitrator
-    will review and resolve on-chain.
+    Filing a dispute locks the dispute_fee from the contract. The registered
+    arbitrators then vote on chain to resolve it.
 
     After disputing, contact the arbitrator at @tappyoak on Telegram or
     Discord with the contract ID, your role (requester), and a description
-    of why the work does not meet spec. The arbitrator's decision is final.
+    of why the work does not meet spec. The resolution is final.
 
-    If the arbitrator sides with you: you receive payment + worker collateral
-    + dispute fee. If they side with the worker: worker receives everything
-    including your dispute fee.
+    The dispute winner receives payment + collateral only. The dispute fee
+    is split among the consensus voting arbitrators, never awarded to either
+    party. Use view_dispute to follow the vote and the payout flags.
 
     Args:
         job_id: The contract ID to dispute.
@@ -582,17 +602,71 @@ def dispute_delivery(job_id: int) -> str:
 
 
 @mcp.tool()
+def view_dispute(job_id: int) -> str:
+    """
+    Get the on chain dispute record for a Disputed or Resolved contract.
+
+    Use this to follow an arbitration vote and to check payout state after
+    resolution. Fields returned:
+    - frozen_n, threshold: arbitrator set size and votes needed, frozen when
+      the dispute was filed.
+    - vc_alice, vc_bob: current vote counts for the requester and the worker.
+    - resolution: 0 none yet, 1 the requester (Alice) won, 2 the worker
+      (Bob) won.
+    - winner_paid: 1 once the winner has claimed. A Resolved contract stays
+      at status 6 or 7 forever, so this flag is the ONLY signal that the
+      payout happened. Never retry claim_funds when winner_paid is 1.
+    - fee_share, fee_remainder, remainder_swept: how the dispute fee was
+      split among the consensus voting arbitrators, and whether the
+      remainder went to the treasury.
+    - bond_encumbered: 1 while this dispute holds a lien on the worker's
+      reputation bond (the bond cannot be reclaimed until the dispute ends).
+
+    Read only, needs no wallet funds.
+
+    Args:
+        job_id: The contract ID whose dispute to inspect.
+
+    Returns the dispute record as JSON with a one line interpretation, or an
+    error message.
+    """
+    dispute = _view_dispute_state(job_id)
+    if dispute is None:
+        return "Error viewing dispute for contract {}: no dispute record found (was a dispute ever filed?).".format(job_id)
+    resolution = int(dispute.get("resolution", 0))
+    winner_paid = int(dispute.get("winner_paid", 0))
+    if resolution == 0:
+        summary = "No resolution yet: leading side has {} of the {} votes needed.".format(
+            max(int(dispute.get("vc_alice", 0)), int(dispute.get("vc_bob", 0))),
+            dispute.get("threshold", "?"),
+        )
+    elif resolution == 1:
+        summary = "Resolution 1 means the requester (Alice) won." + (" Winner already paid." if winner_paid else " Winner has not claimed yet.")
+    else:
+        summary = "Resolution 2 means the worker (Bob) won." + (" Winner already paid." if winner_paid else " Winner has not claimed yet.")
+    return json.dumps(dispute, indent=2) + "\n" + summary
+
+
+@mcp.tool()
 def claim_funds(job_id: int) -> str:
     """
     Claim funds from a Settled or Resolved Idios contract.
 
     Call this after the contract reaches one of these states:
     - Settled (status=4): worker claims payment + collateral
-    - ResolvedToBob (status=7): worker won dispute, claims payment + collateral + dispute_fee
-    - ResolvedToAlice (status=6): requester won dispute, claims payment + collateral + dispute_fee
+    - ResolvedToBob (status=7): worker won the dispute, claims payment + collateral
+    - ResolvedToAlice (status=6): requester won the dispute, claims payment + collateral
     A refunded contract (status=5) returns funds directly and needs no claim.
 
-    The amounts are read from chain automatically.
+    The dispute winner receives payment + collateral only. The dispute fee is
+    split among the consensus voting arbitrators, never awarded to a party.
+
+    A Resolved contract stays at status 6 or 7 forever, even after the winner
+    is paid. This tool checks the winner_paid flag via view_dispute before
+    claiming, and reports "already claimed" instead of firing a call that
+    would halt on chain.
+
+    The amounts are read from chain by the contract; only job_id is sent.
 
     Args:
         job_id: The contract ID to claim from.
@@ -606,8 +680,6 @@ def claim_funds(job_id: int) -> str:
     status = int(job_data.get("status", -1))
     payment = int(job_data.get("payment", 0))
     collateral = int(job_data.get("collateral", 0))
-    dispute_fee = int(job_data.get("dispute_fee", 0))
-    asset_id = int(job_data.get("asset_id", 0))
     mode = int(job_data.get("mode", 66))
 
     STATUS_SETTLED = 4
@@ -616,13 +688,16 @@ def claim_funds(job_id: int) -> str:
     STATUS_VOIDED = 9
 
     if status == STATUS_SETTLED and mode == 65:
-        return "Contract {} is Mode A (hash-verified) and settled automatically at delivery. Funds were released when the matching hash was submitted, so there is nothing to claim.".format(job_id)
+        return "Contract {} is Mode A (hash verified) and settled automatically at delivery. Funds were released when the matching hash was submitted, so there is nothing to claim.".format(job_id)
     if status == STATUS_SETTLED:
         total = payment + collateral
-    elif status == STATUS_RESOLVED_TO_BOB:
-        total = payment + collateral + dispute_fee
-    elif status == STATUS_RESOLVED_TO_ALICE:
-        total = payment + collateral + dispute_fee
+    elif status in (STATUS_RESOLVED_TO_ALICE, STATUS_RESOLVED_TO_BOB):
+        dispute = _view_dispute_state(job_id)
+        if dispute is not None and int(dispute.get("winner_paid", 0)) == 1:
+            return "Contract {} was already claimed by the dispute winner (winner_paid=1). Status stays {} ({}) forever; there is nothing left to claim.".format(
+                job_id, status, _status_name(status)
+            )
+        total = payment + collateral
     elif status == STATUS_VOIDED:
         return "Contract {} is Voided (arbitrator timeout). Use void_claim_requester to reclaim your payment if you are the requester, or void_claim_node to reclaim your collateral if you are the worker.".format(job_id)
     else:
@@ -630,16 +705,12 @@ def claim_funds(job_id: int) -> str:
             job_id, status, _status_name(status)
         )
 
-    args = "role=user,action=claim," + _build_args([
-        ("job_id", job_id),
-        ("total", total),
-        ("asset_id", asset_id),
-    ])
+    args = "role=user,action=claim," + _build_args([("job_id", job_id)])
     ok, parsed, err = _call_shader(args)
     if not ok:
         return "Error claiming from contract {}: {}".format(job_id, err)
-    return "Claimed {} groth from contract {}. Funds will appear in wallet within the next block.".format(
-        total, job_id
+    return "Claimed {} groth (payment {} + collateral {}) from contract {}. Funds will appear in wallet within the next block.".format(
+        total, payment, collateral, job_id
     )
 
 
@@ -714,7 +785,7 @@ def void_dispute(job_id: int) -> str:
     arbitrator_timeout_blocks is a per contract deployment parameter, not a
     universal constant. Never assume a value: compute eligibility from
     dispute_filed_block in view_contract plus the timeout of the contract
-    this server is configured for. On the v4 production contract it is
+    this server is configured for. On the production contract it is
     20160 blocks, roughly 14 days; test deployments may use far shorter
     values.
 
@@ -805,6 +876,125 @@ def treasury_sweep(job_id: int) -> str:
     if not ok:
         return "Error sweeping contract {}: {}".format(job_id, err)
     return "Treasury sweep submitted for contract {}. Forfeited funds will appear in the treasury wallet within the next block.".format(job_id)
+
+
+@mcp.tool()
+def worker_register(stake: int) -> str:
+    """
+    Post a worker reputation bond on the Idios contract.
+
+    The bond is a slashable stake tied to your worker pubkey (the same key
+    counterparties put in worker_pubkey when creating contracts with you).
+    It signals skin in the game: if you lose a dispute, the bond is slashed
+    and collected by the protocol treasury. Requesters can check your bond
+    with view_worker_bond before trusting you with work.
+
+    BEAM only (asset_id 0), any amount, in groth. 1 BEAM = 100,000,000
+    groth. Registering twice halts; use view_worker_bond first if unsure.
+
+    Args:
+        stake: Bond amount in groth. BEAM only.
+
+    Returns confirmation once the bond is on chain, or error message.
+    """
+    args = "role=user,action=worker_register," + _build_args([("stake", stake)])
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error registering worker bond: {}".format(err)
+    return "Worker bond registered: {} groth staked. Check it with view_worker_bond.".format(stake)
+
+
+@mcp.tool()
+def worker_deregister() -> str:
+    """
+    Start withdrawing your worker reputation bond.
+
+    Deregistering starts a cooldown equal to the contract's arbitrator
+    timeout (20160 blocks, about 14 days, on production; much shorter on
+    test deployments). After the cooldown passes, call worker_reclaim to
+    get the stake back. The cooldown exists so a worker cannot yank the
+    bond the moment a dispute is coming.
+
+    While deregistering you count as unbonded for new work, but any open
+    dispute can still encumber and slash the bond until it is reclaimed.
+
+    Returns confirmation, or error message.
+    """
+    args = "role=user,action=worker_deregister," + _build_args([])
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error deregistering worker bond: {}".format(err)
+    return "Worker bond deregistering. Reclaim with worker_reclaim after the cooldown (equal to the arbitrator timeout) has passed."
+
+
+@mcp.tool()
+def worker_reclaim() -> str:
+    """
+    Reclaim your worker reputation bond after deregistering.
+
+    Only works once the cooldown (equal to the contract's arbitrator
+    timeout) has passed since worker_deregister. The call halts on chain if:
+    - the cooldown has not passed yet,
+    - an open dispute currently encumbers the bond (wait for the dispute to
+      resolve or be voided, check bond_encumbered in view_dispute), or
+    - the bond was slashed. A slashed bond is gone forever; the treasury
+      collects it. There is no reclaim path after a slash.
+
+    Check view_worker_bond first: state must be 1 (deregistering) with zero
+    encumbrances and the cooldown elapsed.
+
+    Returns confirmation of the reclaim, or error message.
+    """
+    args = "role=user,action=worker_reclaim," + _build_args([])
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error reclaiming worker bond: {}".format(err)
+    return "Worker bond reclaimed. The stake will appear in your wallet within the next block."
+
+
+@mcp.tool()
+def view_worker_bond(worker_pk: str = "") -> str:
+    """
+    Check a worker's reputation bond on the Idios contract.
+
+    With no argument, shows your own bond (derived from your wallet key).
+    Pass a counterparty's worker pubkey to check theirs before creating a
+    contract with them: a live bond means they have slashable stake behind
+    their work.
+
+    Fields returned:
+    - stake: bonded amount in groth (BEAM).
+    - bonded_at: block the bond was registered.
+    - dereg_block: block deregistration started, 0 if not deregistering.
+    - encumbrances: number of open disputes currently holding a lien on the
+      bond. Reclaim halts while this is above zero.
+    - state: 0 registered (active bond), 1 deregistering (cooldown running),
+      2 gone (reclaimed), 3 slashed (lost a dispute, stake forfeited to the
+      treasury, no recovery).
+
+    Read only, needs no wallet funds.
+
+    Args:
+        worker_pk: Optional worker pubkey hex. Defaults to your own key.
+
+    Returns the bond record as JSON with the state decoded, or an error
+    message.
+    """
+    parts = []
+    if worker_pk:
+        parts.append(("worker_pk", worker_pk))
+    args = "role=user,action=view_worker_bond," + _build_args(parts)
+    ok, parsed, err = _call_shader(args)
+    if not ok or parsed is None:
+        return "Error viewing worker bond: {}".format(err)
+    bond = parsed.get("worker_bond") or parsed.get("bond") or parsed
+    state_names = {0: "registered", 1: "deregistering", 2: "gone", 3: "slashed"}
+    try:
+        state_int = int(bond.get("state", -1))
+        bond["state_name"] = state_names.get(state_int, "unknown({})".format(state_int))
+    except Exception:
+        pass
+    return json.dumps(bond, indent=2)
 
 
 def load_config(path: str) -> dict:

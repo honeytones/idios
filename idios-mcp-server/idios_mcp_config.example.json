@@ -1,7 +1,8 @@
 {
+  "_note": "cid is the live Idios v2 contract on Beam mainnet. shader_app_file must be the repo's current idios_app.wasm (v2).",
   "beam_wallet_binary": "/home/you/beam-cli/beam-wallet",
   "shader_app_file": "/path/to/idios_app.wasm",
   "wallet_path": "/home/you/beam-cli/wallet.db",
-  "node_addr": "127.0.0.1:10005",
-  "cid": "f97517856d721cbb8c16d52e85aadc8561cdfd5fcbf65650a4ae0b43f9614255"
+  "node_addr": "eu-node01.mainnet.beam.mw:8100",
+  "cid": "41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f"
 }
