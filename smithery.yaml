@@ -1,0 +1,26 @@
+# Smithery configuration for the Idios MCP server.
+# Local install only. This server drives a Beam CLI wallet on your own
+# machine and needs a funded wallet.db plus your wallet password, so it
+# cannot run as a Smithery hosted deployment. Install locally, create
+# idios_mcp_config.json per idios-mcp-server/README.md, then connect.
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - configPath
+    properties:
+      configPath:
+        type: string
+        title: Config file path
+        description: Absolute path to your idios_mcp_config.json (see idios-mcp-server/README.md)
+      walletPass:
+        type: string
+        title: Wallet password
+        description: Beam wallet password, passed as IDIOS_WALLET_PASS. Leave unset to be prompted at startup.
+  commandFunction: |-
+    (config) => ({
+      command: 'python3',
+      args: ['idios-mcp-server/idios_mcp_server.py', '--config', config.configPath],
+      env: config.walletPass ? { IDIOS_WALLET_PASS: config.walletPass } : {}
+    })
