@@ -133,7 +133,7 @@ same unit. So 5 NPH = 500,000,000 groth, 0.05 BEAM = 5,000,000 groth.
 
 view_contract is fast (read-only). State-changing calls (commit_collateral,
 submit_delivery, approve_delivery, dispute_delivery, claim_funds) wait for
-on-chain confirmation and may take 1-2 minutes on Beam mainnet.
+on-chain confirmation and usually take one to two minutes on Beam mainnet, occasionally several.
 
 ## Arbitrator
 

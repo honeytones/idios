@@ -61,7 +61,7 @@ Client role. Used by the party requesting the work (Alice). Auto-approve is opt-
 | Refunded | terminal, the refund tx already returned the payment, nothing to claim |
 | Settled, Closed, ResolvedToBob, Cancelled | log and idle |
 
-Batch creation. Operators creating many Mode B contracts at once can define a batches list in config. The daemon fires all specs as one batch_create_b transaction before the poll loop starts, confirms on chain, and marks each batch submitted in durable state so it never fires again on restart. See the Batch creation section below and docs/idios_batch_creation_operator_guide.md for full details.
+Batch creation. Operators creating many Mode B contracts at once can define a batches list in config. The daemon fires all specs as one batch_create_b transaction before the poll loop starts, confirms on chain, and marks each batch submitted in durable state so it never fires again on restart. See the Batch creation section below and ../docs/idios_batch_creation_operator_guide.md for full details.
 
 ---
 
@@ -142,13 +142,13 @@ Each batch fires once. A batch is only marked submitted after the shader call su
 
 After a batch lands, add the job IDs to the jobs list in config and restart the daemon to manage them through their lifecycle.
 
-For complete details including config examples, the args log line eyeball check, manual state recovery, and multiple batches, see docs/idios_batch_creation_operator_guide.md.
+For complete details including config examples, the args log line eyeball check, manual state recovery, and multiple batches, see ../docs/idios_batch_creation_operator_guide.md.
 
 ---
 
 ## Operational notes
 
-Timeouts. SHADER_TIMEOUT_SECONDS is 600. State-changing calls wait on block confirmation, which on Beam mainnet usually takes 1-2 minutes but occasionally longer. If a transaction times out, the daemon logs an error and the chain state on the next poll tells us whether it landed.
+Timeouts. SHADER_TIMEOUT_SECONDS is 600. State-changing calls wait on block confirmation, which on Beam mainnet usually takes one to two minutes, occasionally several. If a transaction times out, the daemon logs an error and the chain state on the next poll tells us whether it landed.
 
 Idempotency. Each daemon action is fired at most once per contract. State is durable in jobs-state.json so daemon restarts do not re-fire completed actions. If a transaction fails on the chain side, the daemon retries on the next poll cycle based on what view_job returns.
 

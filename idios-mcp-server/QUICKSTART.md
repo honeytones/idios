@@ -25,7 +25,7 @@ Set a password and save the seed phrase. This gives you the binary plus a wallet
 
 ## 2. Fund the wallet
 
-For testing, all you need is a little BEAM. The easiest way is buybeam.my, a community run swap that takes ETH straight to BEAM and sends it to your Beam wallet address in seconds, no exchange account needed. You can also buy BEAM on a centralised exchange like MEXC, Gate, or CoinEx using USDT, BTC or ETH and withdraw it.
+For testing, all you need is a little BEAM. The easiest way is buybeam.my, a community run swap that takes ETH straight to BEAM and sends it to your Beam wallet address in seconds, no exchange account needed. One catch: the swap has a minimum of just over $1 of BEAM, smaller amounts send nothing to your wallet. You can also buy BEAM on a centralised exchange like MEXC, Gate, or CoinEx using USDT, BTC or ETH and withdraw it.
 
 A whole test contract costs only cents, and in a self dealing test, where you play both sides, the funds cycle back to you. Use BEAM (asset id 0) as the payment and collateral asset and you are ready.
 
