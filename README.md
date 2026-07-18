@@ -2,7 +2,7 @@
 
 **Private escrow and settlement for AI and other compute on Beam.**
 
-Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on-chain dispute resolution. No public record of amounts or parties.
+Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on chain dispute resolution. No public record of amounts or parties.
 
 **[Website](https://honeytones.github.io/idios-site/)** · **[AI and compute use cases](https://honeytones.github.io/idios-site/private-ai-escrow.html)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f)**
 
@@ -32,7 +32,7 @@ ERC-8183 standardises the same starting primitive on Ethereum, a Job with escrow
 
 Two settlement modes, picked per contract at creation time.
 
-### Hash-verified Settlement (Mode A)
+### Hash verified Settlement (Mode A)
 
 For deterministic work where the correct output is a specific hash known in advance.
 
@@ -71,7 +71,7 @@ Idios uses a two phase claim pattern. Authorisation steps (approve, claim_after_
 - v2 contract (Upgradable3, in place upgrades) on cid 41ef8be5. Originally deployed as v6 at block 3905992 (15 June 2026), upgraded in place to M of N v1 at block 3914637 (21 June 2026), upgraded in place again to v2 at block 3938963 (8 July 2026)
 - M of N arbitration live: global arbitrator registry, voting based dispute resolution (N is 1 today). Registration hardened in v2: BEAM only, 10 BEAM minimum stake, admin co signed
 - Worker reputation bonds live (v2): a worker can lock a standing slashable bond; losing an arbitrated dispute slashes it to the treasury
-- Mode A end-to-end plus all four Mode B resolution paths verified end to end with real funds, and the full v2 slash lifecycle (bond, encumbrance, slash, treasury sweep) proven on mainnet before the production upgrade
+- Mode A end to end plus all four Mode B resolution paths verified end to end with real funds, and the full v2 slash lifecycle (bond, encumbrance, slash, treasury sweep) proven on mainnet before the production upgrade
 - Dapp 3.3.0 published, supports both modes via UI
 
 **Verified resolution paths (real funds on mainnet during development; the job IDs below are from the v5 and v6 deployments that preceded the in place M of N upgrade):**
@@ -80,8 +80,8 @@ Idios uses a two phase claim pattern. Authorisation steps (approve, claim_after_
 |------|-------------|-----|
 | Mode A hash match | Open → Active → Closed (single tx) | 22224 |
 | Mode B approve | Open → Active → AwaitingApproval → Settled → Closed | 11112, 33335 |
-| Mode B dispute, resolved to worker | Open → Active → AwaitingApproval → Disputed → ResolvedToBob → Closed | 11113 |
-| Mode B dispute, resolved to requester | Open → Active → AwaitingApproval → Disputed → ResolvedToAlice → Closed | 11114 |
+| Mode B dispute, resolved to worker | Open → Active → AwaitingApproval → Disputed → ResolvedToBob | 11113 |
+| Mode B dispute, resolved to requester | Open → Active → AwaitingApproval → Disputed → ResolvedToAlice | 11114 |
 | Mode B timeout | Open → Active → AwaitingApproval → Settled → Closed | 11115 |
 | Mode B arbitrator timeout void | Open → Active → AwaitingApproval → Disputed → Voided | 20002 |
 
@@ -104,7 +104,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f
 |------|-------------|
 | `user` | Requester (Alice) or worker (Bob) interacting with the contract lifecycle. Workers can also hold a reputation bond (v2). |
 | `arbitrator` | Member of the M of N arbitrator registry. Registers with a stake (BEAM only, 10 BEAM minimum, admin co signed in v2), votes on disputed contracts, and claims a reward share |
-| `manager` | Deploy and view contract params (one-shot, used during contract setup) |
+| `manager` | Deploy and view contract params (one shot, used during contract setup) |
 | `treasury` | Protocol treasury, set at deploy from the deploying wallet. Collects forfeited worker collateral from Active refunds, dispute fees from voided disputes, and slashed worker bonds (v2) via `sweep` and `slash_sweep`. |
 
 ### Actions per role
@@ -113,7 +113,7 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f
 
 | Action | Description |
 |--------|-------------|
-| `create_a` | Create a Mode A contract (Hash-verified Settlement). Locks payment. |
+| `create_a` | Create a Mode A contract (Hash verified Settlement). Locks payment. |
 | `create_b` | Create a Mode B contract (Reviewed Settlement). Locks payment, sets review window and dispute fee. |
 | `commit` | Worker locks collateral, status moves to Active. |
 | `submit_delivery` | Worker submits result hash. In Mode A, pays out atomically if the hash matches and the contract moves straight to Closed. In Mode B, sets AwaitingApproval. |
@@ -187,7 +187,7 @@ The simplest way to use Idios is through the Beam Desktop wallet's dapp store.
 
 The dapp opens to a landing page with three entry points:
 
-- **Start a contract**: As a requester, fill in deal terms (contract ID, payment, expiry, worker pubkey). Choose Hash-verified Settlement (upload deliverable file, dapp computes SHA-256 hash locally) or Reviewed Settlement (set review window and dispute fee). Create the contract. If you arrived via an offer link from a worker, the form auto-fills.
+- **Start a contract**: As a requester, fill in deal terms (contract ID, payment, expiry, worker pubkey). Choose Hash verified Settlement (upload deliverable file, dapp computes SHA-256 hash locally) or Reviewed Settlement (set review window and dispute fee). Create the contract. If you arrived via an offer link from a worker, the form auto fills.
 - **Generate a contract offer**: As a worker, fill in the agreed deal terms, upload your finished deliverable (Mode A) or set review settings (Mode B), and click Generate Offer. Produces a shareable text block and link for sending to the requester.
 - **My contracts**: See live status of every contract tracked locally. Action buttons appear conditionally: Refund expired contracts, Approve or Dispute Mode B deliveries, Claim Funds when a contract is Settled or Resolved in your favour.
 
@@ -209,7 +209,7 @@ All examples use the live Idios contract on Beam Mimblewimble mainnet (`cid=41ef
 
 ### Get worker pubkey for this contract
 
-The worker's pubkey is contract-specific (because the CID is part of the key derivation). Before any create, the worker runs:
+The worker's pubkey is contract specific (because the CID is part of the key derivation). Before any create, the worker runs:
 
 ```bash
 ./beam-wallet shader \
@@ -229,7 +229,7 @@ The output is the worker's `node_pk` for that contract. Send this to the request
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-### Create a Mode A contract (Hash-verified Settlement)
+### Create a Mode A contract (Hash verified Settlement)
 
 ```bash
 ./beam-wallet shader \
@@ -386,7 +386,7 @@ For an Open contract whose `expiry_block` has passed without anyone committing.
 ```
 idios_contract.h       Contract Shader header (job struct, status enum, method IDs)
 idios_contract.cpp     Contract Shader (on chain logic, escrow, claim, dispute resolution)
-idios_app.cpp          App Shader (wallet-side transaction builder)
+idios_app.cpp          App Shader (wallet side transaction builder)
 idios_contract.wasm    Compiled contract (loaded on chain at deploy)
 idios_app.wasm         Compiled app shader (used by wallet to construct kernels)
 build_v2.sh            Build script
@@ -423,7 +423,7 @@ Today N is 1, a single registered arbitrator (contact below). Registering more i
 
 **Worker reputation bond (v2).** A worker can lock a standing slashable bond keyed to their contract pubkey. Filing a dispute encumbers a live bond (blocking reclaim until the dispute terminates), a quorum resolution against the worker slashes the whole bond to the treasury, and a resolution for the worker or a void releases it untouched. The treasury sweep of a slashed bond waits until every dispute that encumbered it has terminated, so an old dispute can never touch a freshly re registered bond. This is the on chain half of Idios reputation; the off chain score reader is the next piece.
 
-**Contract-specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
+**Contract specific keys.** Every party derives their pubkey using `Env::DerivePk` with the contract ID as part of the input. A worker's pubkey on contract A is different from their pubkey on contract B. Always run `get_key` on the target contract before passing `node_pk` into create.
 
 **Refund semantics.** `refund` returns the requester's payment from an expired contract once `expiry_block` has passed, and it works in two cases. If no worker ever committed (status Open), the payment is simply returned. If a worker committed but never delivered (status Active), the requester still gets only the payment back and the worker's collateral is forfeited to the treasury, not returned to either side. This penalises a worker who locked in and then went silent, and it stops a requester from setting a tight expiry to grab the worker's stake, since the stake always goes to the treasury and never to the requester. A job that has been delivered cannot be refunded, it must complete a resolution path.
 
@@ -448,7 +448,7 @@ Start with [`idios-mcp-server/QUICKSTART.md`](./idios-mcp-server/QUICKSTART.md):
 Supports the two party roles:
 
 - **Worker** commit, submit_delivery, claim (including a won dispute, guarded by the on chain winner_paid flag so a paid claim is never retried).
-- **Client** hash-match auto-approve, optional auto refund after expiry, claim on a won dispute.
+- **Client** hash match auto approve, optional auto refund after expiry, claim on a won dispute.
 
 Both roles also void a stale dispute once the arbitrator timeout passes and reclaim their side from a Voided contract. There is no arbitrator role: dispute resolution is M of N voting by humans over the CLI, never automated.
 
@@ -458,7 +458,7 @@ The dapp's My Contracts page has an **Automate this contract** button on each tr
 
 ## Roadmap
 
-This roadmap is partner-driven. Phase 0 is live on mainnet. Phase 1 is the next planned release. Everything after depends on real-world demand.
+This roadmap is partner driven. Phase 0 is live on mainnet. Phase 1 is the next planned release. Everything after depends on real world demand.
 
 **Phase 0 (shipped): live on mainnet**
 
@@ -469,7 +469,7 @@ This roadmap is partner-driven. Phase 0 is live on mainnet. Phase 1 is the next 
 - [x] Worker collateral floor, mutual cancel, and review window fallback (the v5 surgical set)
 - [x] Dapp 3.3.0 (still on the v6 escrow surface, byte identical so unaffected; arbitrator surface rework deferred)
 - [x] BEAM and Nephrite (NPH) settlement, both tested on mainnet, plus any other Beam confidential asset by `asset_id`
-- [x] Explorer parser, agent runtime daemon (worker and requester roles), MCP server with the full v2 tool set, and in-dapp daemon config export
+- [x] Explorer parser, agent runtime daemon (worker and requester roles), MCP server with the full v2 tool set, and in dapp daemon config export
 
 **Phase 1 (next): real decentralization and reputation**
 
