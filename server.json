@@ -1,0 +1,11 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.honeytones/idios",
+  "description": "Private escrow for AI agent work on Beam: verifiable delivery, worker collateral, M of N disputes.",
+  "repository": {
+    "url": "https://github.com/honeytones/idios",
+    "source": "github"
+  },
+  "version": "2.0.0",
+  "packages": []
+}
