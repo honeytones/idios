@@ -254,7 +254,7 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=commit,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=commit,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,collateral=<GROTH>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
@@ -263,11 +263,11 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 ```bash
 ./beam-wallet shader \
   --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=submit_delivery,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,delivery_hash=<HASH>,mode=<65|66>,payment=<GROTH>,collateral=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=submit_delivery,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,delivery_hash=<HASH>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 ```
 
-`mode=65` for Mode A (ASCII 'A'), `mode=66` for Mode B (ASCII 'B').
+The contract already knows the job's mode from its state; `view_job` reports it as 65 for Mode A (ASCII 'A') or 66 for Mode B (ASCII 'B').
 
 ### Mode B: approve, dispute, claim_after_timeout
 
@@ -279,7 +279,7 @@ Payment is in groth (1 BEAM = 100,000,000 groth). For example `payment=5000000` 
 
 # Requester disputes
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
-  --shader_args="role=user,action=dispute,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>,dispute_fee=<GROTH>,asset_id=0" \
+  --shader_args="role=user,action=dispute,cid=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f,job_id=<N>" \
   --node_addr=eu-node01.mainnet.beam.mw:8100
 
 # Worker claims after review window expires
@@ -371,7 +371,7 @@ The beneficiary receives `payment + collateral` in all three cases. Under M of N
 
 ### Refund (requester, after expiry)
 
-For an Open contract whose `expiry_block` has passed without anyone committing.
+For an expired contract, Open or Active, once `expiry_block` has passed. On the Active path the worker's collateral is forfeited to the treasury.
 
 ```bash
 ./beam-wallet shader --shader_app_file=idios_app.wasm \
@@ -387,7 +387,7 @@ For an Open contract whose `expiry_block` has passed without anyone committing.
 idios_contract.h       Contract Shader header (job struct, status enum, method IDs)
 idios_contract.cpp     Contract Shader (on chain logic, escrow, claim, dispute resolution)
 idios_app.cpp          App Shader (wallet side transaction builder)
-idios_contract.wasm    Compiled contract (loaded on chain at deploy)
+idios_contract.wasm    Compiled contract (build product, not committed; loaded on chain at deploy)
 idios_app.wasm         Compiled app shader (used by wallet to construct kernels)
 build_v2.sh            Build script
 idios-dapp-src/        Mirror of the dapp source (BeamMW template fork)
