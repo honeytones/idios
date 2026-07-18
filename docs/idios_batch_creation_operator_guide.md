@@ -31,7 +31,7 @@ Everything from the standard daemon setup applies:
 - Idios app shader (idios_app.wasm) on disk
 - A wallet.db holding enough funds to cover the sum of all payments in the batch plus standard Beam network fees (~0.021 BEAM per action)
 
-The wallet must be running and connected to a node before the daemon starts. If you are using Beam Desktop, start it first. The embedded node runs at 127.0.0.1:10005. If you are using a remote node, set node_addr accordingly.
+A Beam node must be reachable before the daemon starts. The daemon spawns the CLI wallet itself, nothing else needs to be running. If you use the embedded node at 127.0.0.1:10005 inside a running Beam Desktop, that Desktop must not share the daemon's wallet.db, they fight over the SQLite lock. For a remote or public node set node_addr accordingly.
 
 ---
 
@@ -48,10 +48,10 @@ All nine fields are required for every spec entry. The daemon validates these at
 | job_id | integer | Contract ID. Must be unused on chain. You choose this. |
 | subnet_id | integer | Subnet identifier for the job. |
 | epoch | integer | Epoch for the job. |
-| expiry_block | integer | Block height at which the contract expires. Must be in the future. Use current block + a comfortable margin, e.g. current block + 50000 (roughly 7 days). |
+| expiry_block | integer | Block height at which the contract expires. Must be in the future. Use current block + a comfortable margin, e.g. current block + 10000 (roughly 7 days). |
 | review_window_blocks | integer | How many blocks the requester has to approve or dispute after delivery is submitted. 2000 blocks is roughly 33 hours. |
 | payment | integer | Payment amount in groth. 1 BEAM = 100,000,000 groth. For NPH (asset_id 47), same unit. Must be greater than zero. |
-| dispute_fee | integer | Fee the requester locks if they dispute. Lost if the dispute is resolved against them. Must be greater than zero. |
+| dispute_fee | integer | Fee the requester locks if they dispute. Win or lose, the fee pays the voting arbitrators for judging the dispute. Must be greater than zero. |
 | asset_id | integer | Asset ID for the payment. 0 = BEAM, 47 = NPH. |
 | node_pk | string | Public key of the worker (Bob) who will commit collateral and deliver. |
 
@@ -113,7 +113,7 @@ On restart with a successfully submitted batch, the daemon logs:
 
 ## Getting the current block height
 
-expiry_block must be in the future. Check the dapp (any contract view shows chain state). Add your desired margin to the current block. 50000 blocks is roughly 7 days at current Beam block times.
+expiry_block must be in the future. Check the dapp (any contract view shows chain state). Add your desired margin to the current block. 10000 blocks is roughly 7 days at current Beam block times.
 
 ---
 
@@ -125,7 +125,7 @@ You can define more than one batch in the batches list. Each is processed indepe
 
 ## On-chain test reference
 
-Batch creation confirmed working on Beam mainnet against contract ed788e2f03faf0a461d110725509aa49b93671007bb554ea4baea077236ac3cb:
+Batch creation confirmed working on Beam mainnet against the v3 generation contract (f40eb64da63a69d91afa1a947d9d272a9f80027d7261aa822ec0e4b5827cdc45); batch_create_b is unchanged on the live v2 contract:
 
 | Job IDs | Method | Result |
 |---|---|---|
