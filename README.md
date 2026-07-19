@@ -6,6 +6,8 @@ Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on
 
 **[Website](https://honeytones.github.io/idios-site/)** · **[AI and compute use cases](https://honeytones.github.io/idios-site/private-ai-escrow.html)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f)**
 
+[![idios MCP server](https://glama.ai/mcp/servers/honeytones/idios/badges/score.svg)](https://glama.ai/mcp/servers/honeytones/idios)
+
 > "Pay privately. Verify on chain. Dispute when needed."
 
 ---

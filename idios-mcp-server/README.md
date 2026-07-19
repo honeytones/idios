@@ -1,5 +1,7 @@
 # Idios MCP Server
 
+[![idios MCP server](https://glama.ai/mcp/servers/honeytones/idios/badges/card.svg)](https://glama.ai/mcp/servers/honeytones/idios)
+
 > New here? Start with [QUICKSTART.md](QUICKSTART.md): from nothing to a settled contract, for an agent developer.
 
 Exposes Idios private escrow contract actions as MCP tools so any MCP-compatible
