@@ -33,11 +33,11 @@ pattern and keeps the wallet password off the network.
 Notes:
     - beam-wallet shader exits rc=1 even on success. Trust parsed output not rc.
     - State-changing calls (commit, submit_delivery, approve, dispute, claim)
-      can take 1-2 minutes to confirm on chain. SHADER_TIMEOUT_SECONDS=600.
+      usually confirm in one to two minutes, occasionally several. SHADER_TIMEOUT_SECONDS=600.
     - view_contract is read-only and fast.
     - The CID in config must match the deployed Idios contract (production v2
       is 41ef8be5...).
-    - expiry_block must be in the future. Use current_block + 50000 for ~7 days.
+    - expiry_block must be in the future. Use current_block + 10000 for ~7 days.
     - Amounts are in groth. 1 BEAM = 100,000,000 groth. NPH (asset_id=47) same.
 """
 
@@ -198,9 +198,9 @@ mcp = FastMCP(
         "Use these tools to create and manage private work contracts. "
         "Both sides lock funds before work starts. Amounts and parties stay private. "
         "All amounts are in groth (1 BEAM = 100,000,000 groth, NPH asset_id=47 same unit). "
-        "expiry_block must be in the future: use current block + 50000 for roughly 7 days. "
+        "expiry_block must be in the future: use current block + 10000 for roughly 7 days. "
         "State-changing calls (commit, submit_delivery, approve, dispute, claim) "
-        "wait for on-chain confirmation and may take 1-2 minutes. "
+        "wait for on-chain confirmation, usually one to two minutes, occasionally several. "
         "If a dispute is never resolved within the arbitrator timeout, recover "
         "funds with void_dispute, then void_claim_requester or void_claim_node. "
         "Disputes are resolved by arbitrators voting on chain; the winner "
@@ -245,12 +245,12 @@ def get_chain_info() -> str:
 
     Call this before creating a contract so you can choose a future
     expiry_block (the contract requires expiry_block to be in the future).
-    Add a margin to the returned height: current + 50000 is roughly 7 days,
+    Add a margin to the returned height: current + 10000 is roughly 7 days,
     current + 2000 is a short test window.
 
     Returns the current block height, or an error message.
     """
-    import os, subprocess
+    import os, re, subprocess
     cmd = [
         _cfg["beam_wallet_binary"], "info",
         "--node_addr=" + _cfg["node_addr"],
@@ -269,11 +269,21 @@ def get_chain_info() -> str:
     except Exception as e:
         return "Error reading chain info: " + str(e)
     out = result.stdout + result.stderr
+    # The wallet DB's "Current height" can be DAYS stale until the wallet
+    # syncs. The sync log lines ("Sync up to N-hash", "Current state is
+    # N-hash") carry the node tip. Collect every height signal and take the
+    # maximum, which is correct whichever line is stale.
+    heights = []
     for line in out.splitlines():
         if "Current height" in line:
             digits = "".join(ch for ch in line if ch.isdigit())
             if digits:
-                return "Current block height: {}. For expiry_block add a margin (current + 50000 is about 7 days, current + 2000 is a short test).".format(int(digits))
+                heights.append(int(digits))
+        m = re.search(r"(?:Sync up to|Current state is)\s+(\d+)-", line)
+        if m:
+            heights.append(int(m.group(1)))
+    if heights:
+        return "Current block height: {}. For expiry_block add a margin (current + 10000 is about 7 days, current + 2000 is a short test).".format(max(heights))
     return "Could not read the current height from wallet info."
 
 
@@ -337,7 +347,7 @@ def create_contract_b(
         worker_pubkey: Worker's Beam pubkey from their Idios dapp or get_key action.
         payment: Payment amount in groth (1 BEAM = 100,000,000 groth).
         asset_id: 0 for BEAM, 47 for NPH (USD-pegged stablecoin).
-        expiry_block: Block height when contract expires. Use current_block + 50000 for ~7 days.
+        expiry_block: Block height when contract expires. Use current_block + 10000 for ~7 days.
         review_window_blocks: How long requester has to approve/dispute after delivery.
             2000 blocks is roughly 33 hours. Pass 0 (or omit) to use the
             contract default set at deploy time.
@@ -408,7 +418,7 @@ def create_contract_a(
         worker_pubkey: Worker's Beam pubkey from their Idios dapp or get_key action.
         payment: Payment amount in groth (1 BEAM = 100,000,000 groth).
         asset_id: 0 for BEAM, 47 for NPH (USD-pegged stablecoin).
-        expiry_block: Block height when contract expires. Use current_block + 50000 for ~7 days.
+        expiry_block: Block height when contract expires. Use current_block + 10000 for ~7 days.
         result_hash: SHA-256 hash of the expected deliverable file (64-char hex string).
         required_collateral: Minimum collateral in groth the worker must commit.
             The contract rejects any commit below this floor. 0 (default) = no floor.
@@ -437,6 +447,102 @@ def create_contract_a(
         return "Error creating contract {}: {}".format(job_id, err)
     return "Contract {} created (Mode A). Payment {} groth locked. Result hash locked: {}. Worker must now commit collateral.".format(
         job_id, payment, result_hash
+    )
+
+
+@mcp.tool()
+def batch_create_contracts(specs: list) -> str:
+    """
+    Create up to 50 Mode B escrow contracts in ONE wallet transaction.
+
+    This is swarm payroll: an orchestrator agent that has split work across
+    many worker agents locks payment for all of them at once, privately.
+    One transaction, one network fee, every child contract created Open.
+    Each worker then commits collateral to their own contract and the normal
+    Mode B lifecycle (deliver, review, approve or dispute, claim) runs per
+    contract from there.
+
+    All contracts in the batch are created by this wallet as the requester.
+    The wallet must hold the SUM of all payments plus one network fee.
+    Batch creation is Mode B only, and specs cannot carry required_collateral
+    or spec_hash; create those contracts individually with create_contract_b.
+
+    Each spec is an object with these fields:
+        job_id (int, required): unique ID you choose, unused on chain, and
+            not repeated inside the batch.
+        worker_pubkey (str, required): that worker's pubkey for this contract
+            (from their get_key).
+        payment (int, required): payment in groth (1 BEAM = 100,000,000).
+        asset_id (int, required): 0 for BEAM, 47 for NPH.
+        expiry_block (int, required): future block height. current + 10000
+            is roughly 7 days.
+        dispute_fee (int, required): locked if the requester disputes; it
+            pays the voting arbitrators win or lose.
+        review_window_blocks (int, optional, default 0): approval window
+            after delivery. 0 uses the contract default.
+        subnet_id (int, optional, default 1).
+        epoch (int, optional, default 1).
+
+    Args:
+        specs: List of 1 to 50 spec objects as described above.
+
+    Returns a summary of the created contracts, or an error message.
+    """
+    if not isinstance(specs, list) or len(specs) == 0:
+        return "Error: specs must be a non-empty list of contract spec objects."
+    if len(specs) > 50:
+        return "Error: batch is capped at 50 contracts per transaction (got {}). Split into multiple batches.".format(len(specs))
+
+    required = ["job_id", "worker_pubkey", "payment", "asset_id", "expiry_block", "dispute_fee"]
+    seen_ids = set()
+    total_payment = 0
+    parts = [("batch_count", len(specs))]
+    for i, spec in enumerate(specs):
+        if not isinstance(spec, dict):
+            return "Error: spec {} is not an object.".format(i)
+        missing = [k for k in required if k not in spec]
+        if missing:
+            return "Error: spec {} (job_id {}) missing required fields: {}.".format(
+                i, spec.get("job_id", "?"), ", ".join(missing))
+        try:
+            job_id = int(spec["job_id"])
+            payment = int(spec["payment"])
+            asset_id = int(spec["asset_id"])
+            expiry_block = int(spec["expiry_block"])
+            dispute_fee = int(spec["dispute_fee"])
+            review_window = int(spec.get("review_window_blocks", 0))
+            subnet_id = int(spec.get("subnet_id", 1))
+            epoch = int(spec.get("epoch", 1))
+        except (TypeError, ValueError):
+            return "Error: spec {} has a non-integer value in an integer field.".format(i)
+        if job_id in seen_ids:
+            return "Error: job_id {} appears more than once in the batch.".format(job_id)
+        seen_ids.add(job_id)
+        if payment <= 0:
+            return "Error: spec {} (job_id {}) has payment <= 0.".format(i, job_id)
+        if dispute_fee <= 0:
+            return "Error: spec {} (job_id {}) has dispute_fee <= 0 (the contract requires a positive fee).".format(i, job_id)
+        worker_pubkey = str(spec["worker_pubkey"]).strip()
+        if not worker_pubkey:
+            return "Error: spec {} (job_id {}) has an empty worker_pubkey.".format(i, job_id)
+        total_payment += payment
+        parts.append(("job_id_" + str(i), job_id))
+        parts.append(("subnet_id_" + str(i), subnet_id))
+        parts.append(("epoch_" + str(i), epoch))
+        parts.append(("expiry_block_" + str(i), expiry_block))
+        parts.append(("review_window_blocks_" + str(i), review_window))
+        parts.append(("payment_" + str(i), payment))
+        parts.append(("dispute_fee_" + str(i), dispute_fee))
+        parts.append(("asset_id_" + str(i), asset_id))
+        parts.append(("node_pk_" + str(i), worker_pubkey))
+
+    args = "role=user,action=batch_create_b," + _build_args(parts)
+    ok, parsed, err = _call_shader(args)
+    if not ok:
+        return "Error creating batch of {} contracts: {}".format(len(specs), err)
+    id_list = ", ".join(str(s["job_id"]) for s in specs)
+    return "Batch created: {} Mode B contracts (job_ids: {}) in one transaction. Total payment locked: {} groth. Each worker must now commit collateral to their own contract.".format(
+        len(specs), id_list, total_payment
     )
 
 

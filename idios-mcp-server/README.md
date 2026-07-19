@@ -104,6 +104,7 @@ plaintext. Fine on a machine you control, but know the tradeoff.
 | get_key | any | Get your own pubkey, the value a counterparty uses as worker_pubkey |
 | create_contract_b | requester | Create Mode B (reviewed) contract, locks payment |
 | create_contract_a | requester | Create Mode A (hash-verified) contract, locks payment + result hash |
+| batch_create_contracts | requester | Create up to 50 Mode B contracts in one transaction (swarm payroll: one orchestrator pays a whole subagent swarm at once) |
 | commit_collateral | worker | Lock collateral to activate contract |
 | submit_delivery | worker | Submit delivery hash, auto-settles Mode A on match |
 | approve_delivery | requester | Approve Mode B delivery, worker can then claim |
