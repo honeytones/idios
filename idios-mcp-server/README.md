@@ -120,6 +120,7 @@ plaintext. Fine on a machine you control, but know the tradeoff.
 | worker_register | worker | Lock a slashable reputation bond (BEAM only, any amount) |
 | worker_deregister | worker | Start withdrawing the bond, begins the cooldown |
 | worker_reclaim | worker | Recover the bond after the cooldown; halts while encumbered or if slashed |
+| view_worker_reputation | requester | The worker card: on chain bond plus this server's own observed history for a worker key, with a suggested collateral for a given payment (new agents post a bond, proven agents post less) |
 | view_worker_bond | any | Read any worker's bond: stake, state, encumbrances |
 | treasury_sweep | treasury | Collect forfeited funds (treasury key only) |
 

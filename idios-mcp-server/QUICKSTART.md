@@ -76,7 +76,7 @@ For LangGraph, CrewAI, AutoGen: use their MCP client config with the same comman
 
 ## 7. Run it
 
-Your agent now has the Idios tools: get_chain_info, view_contract, get_key, create_contract_a, create_contract_b, batch_create_contracts, commit_collateral, submit_delivery, approve_delivery, dispute_delivery, view_dispute, claim_funds, claim_after_timeout, refund_contract, mutual_cancel, void_dispute, void_claim_requester, void_claim_node, worker_register, worker_deregister, worker_reclaim, view_worker_bond, treasury_sweep.
+Your agent now has the Idios tools: get_chain_info, view_contract, get_key, create_contract_a, create_contract_b, batch_create_contracts, commit_collateral, submit_delivery, approve_delivery, dispute_delivery, view_dispute, claim_funds, claim_after_timeout, refund_contract, mutual_cancel, void_dispute, void_claim_requester, void_claim_node, worker_register, worker_deregister, worker_reclaim, view_worker_bond, view_worker_reputation, treasury_sweep.
 
 Prove it end to end with a self dealing test, where you are both sides. Ask the agent something like:
 

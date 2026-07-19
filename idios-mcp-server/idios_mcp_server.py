@@ -190,6 +190,130 @@ def _view_dispute_state(job_id: int):
     return parsed.get("dispute") or parsed
 
 
+# ----------------------------------------------------------------
+# Local observation ledger (worker reputation, phase 1)
+# ----------------------------------------------------------------
+# Every contract this server views is recorded per worker pubkey in a small
+# local json file. Reputation here is LOCAL AND OBSERVED by design: it is
+# what this wallet has personally seen a worker do, so a stranger cannot
+# inflate it by self dealing elsewhere. The global, unfakeable half of the
+# picture is the on chain bond (view_worker_bond).
+
+_config_path = None
+
+
+def _ledger_path():
+    custom = _cfg.get("reputation_ledger_path")
+    if custom:
+        return custom
+    base = os.path.dirname(os.path.abspath(_config_path)) if _config_path else "."
+    return os.path.join(base, "idios_reputation_ledger.json")
+
+
+def _ledger_load():
+    try:
+        with open(_ledger_path()) as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _ledger_save(data):
+    try:
+        with open(_ledger_path(), "w") as f:
+            json.dump(data, f, indent=1)
+    except Exception as e:
+        logging.warning("reputation ledger write failed: %s", e)
+
+
+def _observe_job(job):
+    """Record a viewed job against its worker pubkey. Never raises."""
+    try:
+        pk = job.get("node_pk")
+        job_id = job.get("job_id")
+        if not pk or job_id is None:
+            return
+        ledger = _ledger_load()
+        rec = ledger.setdefault(str(pk), {"jobs": {}})
+        rec["jobs"][str(job_id)] = {
+            "status": int(job.get("status", -1)),
+            "payment": int(job.get("payment", 0)),
+            "collateral": int(job.get("collateral", 0)),
+            "asset_id": int(job.get("asset_id", 0)),
+            "mode": int(job.get("mode", 0)),
+        }
+        _ledger_save(ledger)
+    except Exception as e:
+        logging.warning("reputation observation failed: %s", e)
+
+
+def _reputation_stats(pk, ledger):
+    """Bucket everything observed for a worker pubkey. Pure function."""
+    jobs = ledger.get(str(pk), {}).get("jobs", {})
+    stats = {
+        "jobs_observed": len(jobs),
+        "completed": 0,           # Settled(4) or Closed(8)
+        "disputes_lost": 0,       # ResolvedToAlice(6), worker lost
+        "disputes_won": 0,        # ResolvedToBob(7), worker won
+        "abandoned": 0,           # Refunded(5) with collateral locked: committed then went silent
+        "cancelled": 0,           # Cancelled(10), mutual, neutral
+        "voided": 0,              # Voided(9), arbitration timed out, neutral
+        "in_flight": 0,           # Open/Active/AwaitingApproval/Disputed
+        "completed_volume": 0,    # groth across completed jobs
+    }
+    for j in jobs.values():
+        st = j.get("status", -1)
+        if st in (4, 8):
+            stats["completed"] += 1
+            stats["completed_volume"] += j.get("payment", 0)
+        elif st == 6:
+            stats["disputes_lost"] += 1
+        elif st == 7:
+            stats["disputes_won"] += 1
+        elif st == 5 and j.get("collateral", 0) > 0:
+            stats["abandoned"] += 1
+        elif st == 10:
+            stats["cancelled"] += 1
+        elif st == 9:
+            stats["voided"] += 1
+        elif st in (0, 1, 2, 3):
+            stats["in_flight"] += 1
+    return stats
+
+
+def _suggest_collateral(payment, bond_state, bond_stake, stats):
+    """Suggested collateral for a job of the given payment, with reasons.
+    Transparent heuristics, not a guarantee. Returns (amount, reasons)."""
+    reasons = []
+    pct = 50
+    reasons.append("baseline 50% of payment for an unknown or lightly proven worker")
+    bad_history = stats["disputes_lost"] > 0 or stats["abandoned"] > 0
+    if bond_state == 3:
+        pct = 100
+        reasons.append("bond SLASHED: this key lost an arbitrated dispute and forfeited its stake; demand full collateral or do not hire")
+        return payment * pct // 100, reasons
+    if bad_history:
+        pct = 100
+        reasons.append("this server has observed {} lost dispute(s) and {} abandoned job(s) on this key: demand full collateral".format(
+            stats["disputes_lost"], stats["abandoned"]))
+        return payment * pct // 100, reasons
+    if bond_state == 0 and bond_stake > 0:
+        if bond_stake >= 2 * payment and stats["completed"] >= 3:
+            pct = 15
+            reasons.append("live bond covers 2x this payment and {} clean completions observed: 15%".format(stats["completed"]))
+        elif bond_stake >= payment:
+            pct = 25
+            reasons.append("live bond covers this payment: 25% (losing a dispute costs them the whole bond)")
+        else:
+            pct = 40
+            reasons.append("live bond exists but is smaller than this payment: 40%")
+    elif stats["completed"] >= 3:
+        pct = 35
+        reasons.append("no bond, but {} clean completions observed by this server: 35%".format(stats["completed"]))
+    return payment * pct // 100, reasons
+
+
 # Initialise FastMCP server.
 mcp = FastMCP(
     "idios",
@@ -235,6 +359,7 @@ def view_contract(job_id: int) -> str:
     job["status_name"] = _status_name(status_int)
     asset_id = int(job.get("asset_id", 0))
     job["asset_name"] = {0: "BEAM", 47: "NPH"}.get(asset_id, "asset {}".format(asset_id))
+    _observe_job(job)
     return json.dumps(job, indent=2)
 
 
@@ -1103,6 +1228,77 @@ def view_worker_bond(worker_pk: str = "") -> str:
     return json.dumps(bond, indent=2)
 
 
+@mcp.tool()
+def view_worker_reputation(worker_pk: str = "", payment: int = 0) -> str:
+    """
+    The worker card: everything this server knows about a worker before you
+    hire them, plus a suggested collateral amount for a job.
+
+    Combines two signals:
+    1. The on chain bond (global, unfakeable): slashable stake the worker
+       has locked behind their work. Losing an arbitrated dispute forfeits
+       it, so a live bond is money where their mouth is.
+    2. This server's own observed history (local, wash trading resistant):
+       every contract THIS server has viewed involving the worker's key,
+       bucketed into completions, lost disputes, abandoned jobs, and so on.
+       It is deliberately NOT a global score: strangers cannot inflate what
+       you personally observed.
+
+    Pass a payment amount to also get a suggested collateral to demand:
+    high for an unknown key, lower as bond coverage and clean observed
+    history accumulate, full collateral (or a do not hire warning) for a
+    slashed bond or observed bad history. The suggestion is a transparent
+    heuristic with its reasoning spelled out, not a guarantee.
+
+    Args:
+        worker_pk: Worker pubkey hex. Defaults to your own key.
+        payment: Optional job payment in groth. If above zero, a suggested
+            collateral for that payment is included.
+
+    Returns a JSON worker card, or an error message.
+    """
+    if not worker_pk:
+        try:
+            ok, parsed, err = _call_shader("role=user,action=get_key," + _build_args([]))
+        except Exception as e:
+            return "Error deriving own key: {}".format(e)
+        if not ok or parsed is None:
+            return "Error deriving own key: {}".format(err)
+        key = parsed.get("key") or parsed
+        worker_pk = key.get("pub_key", "")
+        if not worker_pk:
+            return "Error: could not derive own pubkey."
+
+    card = {"worker_pk": worker_pk}
+
+    try:
+        bond_raw = view_worker_bond(worker_pk)
+    except Exception as e:
+        bond_raw = "bond lookup failed: {}".format(e)
+    bond_state = -1
+    bond_stake = 0
+    try:
+        bond = json.loads(bond_raw)
+        bond_state = int(bond.get("state", -1))
+        bond_stake = int(bond.get("stake", 0))
+        card["bond"] = bond
+    except (json.JSONDecodeError, ValueError):
+        card["bond"] = "none found ({})".format(bond_raw.strip()[:80])
+
+    stats = _reputation_stats(worker_pk, _ledger_load())
+    card["observed_by_this_server"] = stats
+
+    if payment > 0:
+        amount, reasons = _suggest_collateral(payment, bond_state, bond_stake, stats)
+        card["suggested_collateral"] = {
+            "payment": payment,
+            "suggested": amount,
+            "reasoning": reasons,
+        }
+
+    return json.dumps(card, indent=2)
+
+
 def load_config(path: str) -> dict:
     with open(path) as f:
         cfg = json.load(f)
@@ -1125,6 +1321,7 @@ def main():
 
     try:
         _cfg = load_config(args.config)
+        globals()["_config_path"] = args.config
     except Exception as e:
         print("Config error: " + str(e), file=sys.stderr)
         sys.exit(1)
