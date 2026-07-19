@@ -322,12 +322,21 @@ def get_current_height(cfg, password, logger):
         logger.warning("could not read chain height: %s", e)
         return None
     out = proc.stdout + proc.stderr
+    # The wallet DB's "Current height" can be DAYS stale until the wallet
+    # syncs; the sync log lines carry the node tip. Collect every height
+    # signal and take the maximum (same fix as the MCP server).
+    heights = []
     for line in out.splitlines():
         if "Current height" in line:
             digits = "".join(ch for ch in line if ch.isdigit())
             if digits:
-                return int(digits)
-    logger.warning("could not parse Current height from wallet info output")
+                heights.append(int(digits))
+        m = re.search(r"(?:Sync up to|Current state is)\s+(\d+)-", line)
+        if m:
+            heights.append(int(m.group(1)))
+    if heights:
+        return max(heights)
+    logger.warning("could not parse any height signal from wallet info output")
     return None
 
 
@@ -388,6 +397,54 @@ def shader_view_dispute(cfg, password, job_id, logger):
     if rc != 0 or parsed is None:
         return None
     return parsed.get("dispute") or parsed
+
+
+def shader_view_worker_bond(cfg, password, worker_pk, logger):
+    """Read a worker's on chain reputation bond. Returns the bond dict, or
+    None if the worker has no bond record (or the read failed)."""
+    args = "role=user,action=view_worker_bond," + build_args(cfg, [
+        ("worker_pk", worker_pk),
+    ])
+    rc, _, _, parsed = call_shader(cfg, password, args, logger)
+    if rc != 0 or parsed is None:
+        return None
+    return parsed.get("worker_bond") or parsed.get("bond") or parsed
+
+
+BOND_STATE_NAMES = {0: "registered", 1: "deregistering", 2: "gone", 3: "slashed"}
+
+
+def evaluate_worker_bond(bond, min_stake):
+    """Pure decision: given a bond dict (or None) and a configured floor,
+    return (acceptable, description). acceptable is against min_stake only;
+    a slashed bond is never acceptable when a floor is set."""
+    if not bond:
+        desc = "no bond on chain"
+        return (min_stake <= 0, desc)
+    try:
+        state = int(bond.get("state", -1))
+        stake = int(bond.get("stake", 0))
+    except (TypeError, ValueError):
+        return (min_stake <= 0, "unreadable bond record")
+    desc = "bond stake={} groth, state={}".format(
+        stake, BOND_STATE_NAMES.get(state, "unknown({})".format(state)))
+    if min_stake <= 0:
+        return (True, desc)
+    if state == 3:
+        return (False, desc + " (SLASHED: lost an arbitrated dispute)")
+    if state != 0:
+        return (False, desc + " (bond not live)")
+    return (stake >= int(min_stake), desc)
+
+
+def log_worker_card(cfg, password, worker_pk, logger, context):
+    """Advisory: log what is known about a worker's bond. Never raises."""
+    try:
+        bond = shader_view_worker_bond(cfg, password, worker_pk, logger)
+        _, desc = evaluate_worker_bond(bond, 0)
+        logger.info("worker card (%s): pk=%s...: %s", context, str(worker_pk)[:16], desc)
+    except Exception as e:
+        logger.warning("worker card (%s): lookup failed: %s", context, e)
 
 
 def shader_void_dispute(cfg, password, job_id, logger):
@@ -500,10 +557,36 @@ def run_batches(cfg, password, state, state_path, logger):
         job_ids = [s["job_id"] for s in specs]
 
         logger.info(
-            "batch %s: firing batch_create_b, count=%d, job_ids=%s, "
+            "batch %s: preparing batch_create_b, count=%d, job_ids=%s, "
             "total_payment=%d groth (wallet must have this available)",
             batch_id, len(specs), job_ids, total_payment
         )
+
+        # Worker card pre flight: one bond check per distinct worker in the
+        # batch. Advisory by default; if min_worker_bond_stake is set in
+        # config, refuse to fire a batch containing any worker below the
+        # floor (escrow graduation: only hire bonded workers).
+        min_stake = int(cfg.get("min_worker_bond_stake", 0))
+        distinct_pks = []
+        for spec in specs:
+            pk = spec["node_pk"]
+            if pk not in distinct_pks:
+                distinct_pks.append(pk)
+        blocked = []
+        for pk in distinct_pks:
+            bond = shader_view_worker_bond(cfg, password, pk, logger)
+            acceptable, desc = evaluate_worker_bond(bond, min_stake)
+            logger.info("batch %s worker card: pk=%s...: %s", batch_id, str(pk)[:16], desc)
+            if not acceptable:
+                blocked.append((pk, desc))
+        if blocked:
+            logger.error(
+                "batch %s: NOT firing. min_worker_bond_stake=%d and %d worker(s) "
+                "fall below it or hold a dead bond: %s. Batch will re-evaluate "
+                "on next daemon start.",
+                batch_id, min_stake, len(blocked),
+                "; ".join("{}... ({})".format(str(p)[:16], d) for p, d in blocked))
+            continue
 
         ok = shader_batch_create_b(cfg, password, specs, logger)
         if not ok:
@@ -763,6 +846,12 @@ def handle_client_job(cfg, password, job_cfg, state, logger,
     if job_state.get("last_status") != status:
         logger.info("job %s: status -> %s (%s)", job_id, status, status_name(status))
         job_state["last_status"] = status
+
+    if not job_state.get("worker_card_logged"):
+        pk = job.get("node_pk")
+        if pk:
+            log_worker_card(cfg, password, pk, logger, "client job {}".format(job_id))
+        job_state["worker_card_logged"] = True
 
     if status in (STATUS_OPEN, STATUS_ACTIVE) and not job_state.get("refund_fired"):
         if not job_cfg.get("auto_refund_after_expiry", False):

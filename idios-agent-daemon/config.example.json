@@ -5,6 +5,7 @@
   "node_addr": "eu-node01.mainnet.beam.mw:8100",
   "cid": "41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f",
   "poll_interval_seconds": 30,
+  "min_worker_bond_stake": 0,
   "log_file": "/home/tones/idios-repo/idios-agent-daemon/idios-daemon.log",
   "state_file": "/home/tones/idios-repo/idios-agent-daemon/jobs-state.json",
   "jobs": [

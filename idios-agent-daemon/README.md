@@ -146,6 +146,14 @@ For complete details including config examples, the args log line eyeball check,
 
 ---
 
+## Worker reputation (escrow graduation)
+
+The client role logs a worker card the first time it sees each managed job: the worker's on chain reputation bond (stake and state) as one advisory log line. A live bond means the worker has slashable stake behind their work; losing an arbitrated dispute forfeits it.
+
+Batch creation runs the same check per distinct worker before firing. By default this is advisory only. Set min_worker_bond_stake in config (groth, default 0) to enforce it: the daemon refuses to fire any batch containing a worker whose live bond is below the floor, or whose bond is slashed or not live, before any transaction goes out. This is escrow graduation in one config line: new agents post a bond, proven agents get hired.
+
+For the richer worker card (bond plus locally observed history plus a suggested collateral amount), use the MCP server's view_worker_reputation tool.
+
 ## Operational notes
 
 Timeouts. SHADER_TIMEOUT_SECONDS is 600. State-changing calls wait on block confirmation, which on Beam mainnet usually takes one to two minutes, occasionally several. If a transaction times out, the daemon logs an error and the chain state on the next poll tells us whether it landed.
