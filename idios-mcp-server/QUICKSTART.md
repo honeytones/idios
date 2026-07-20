@@ -6,7 +6,7 @@ It assumes you are a developer running an agent on a server or a dev box (Linux 
 
 ## Heads up: there are two coins called Beam
 
-You want the privacy coin built on MimbleWimble called Beam privacy, from **beam.mw**. There is a completely different project, Beam Network, a gaming token on Avalanche at onbeam.com, which has nothing to do with Beam Privacy. Everything below is the MimbleWimble Beam.
+You want the privacy coin built on MimbleWimble called Beam privacy, from **beam.mw**. There is a completely different project, Beam Network, a gaming token on Avalanche, which has nothing to do with Beam Privacy. Everything below is the MimbleWimble Beam.
 
 ## What you need
 
@@ -25,7 +25,7 @@ Set a password and save the seed phrase. This gives you the binary plus a wallet
 
 ## 2. Fund the wallet
 
-For testing, all you need is a little BEAM. The easiest way is buybeam.my, a community run swap that takes ETH straight to BEAM and sends it to your Beam wallet address in seconds, no exchange account needed. One catch: the swap has a minimum of just over $1 of BEAM, smaller amounts send nothing to your wallet. You can also buy BEAM on a centralised exchange like MEXC, Gate, or CoinEx using USDT, BTC or ETH and withdraw it.
+For testing, all you need is a little BEAM. The easiest way is [buybeam.my](https://buybeam.my/), a community run swap that takes ETH straight to BEAM and sends it to your Beam wallet address in seconds, no exchange account needed. Two limits: the swap has a minimum of just over $1 of BEAM, smaller amounts send nothing to your wallet, and a maximum of $100 per swap. You can also buy BEAM on a centralised exchange like MEXC, Gate, or CoinEx using USDT, BTC or ETH and withdraw it. For the full picture, supported exchanges, mining, and the wider Beam ecosystem, see [beam.mw](https://www.beam.mw/).
 
 A whole test contract costs only cents, and in a self dealing test, where you play both sides, the funds cycle back to you. Use BEAM (asset id 0) as the payment and collateral asset and you are ready.
 
