@@ -183,7 +183,7 @@ The simplest way to use Idios is through the Beam Desktop wallet's dapp store.
 
     Two unrelated coins share the name and ticker. Idios runs on **Beam Mimblewimble** (privacy chain, [beam.mw](https://beam.mw), mainnet since 2019), NOT Beam Network (an unrelated Avalanche gaming subnet). Make sure you buy the Mimblewimble one.
 
-    Beam Mimblewimble is on MEXC, Gate, and CoinEx. It is not on Binance, Coinbase, or Kraken. For a quick swap from ETH to BEAM without an exchange account, [buybeam.my](https://buybeam.my/) is a community run service. Two limits: the swap has a minimum of $1 of BEAM, smaller amounts send nothing to your wallet, and a maximum of $100 per swap.
+    Beam Mimblewimble is on MEXC, Gate, and CoinEx. It is not on Binance, Coinbase, or Kraken. For a quick swap from ETH to BEAM without an exchange account, [buybeam.my](https://buybeam.my/) is a community run service. Two limits: the swap has a minimum of $1 of BEAM, smaller amounts send nothing to your wallet, and a maximum of $100 per swap (its liquidity pool is small; for larger buys use an exchange).
 3. Install the Idios dapp from the wallet's DApp Store, or sideload the latest [`.dapp` file from releases](https://github.com/honeytones/idios/releases/latest).
 4. Open Idios from your installed apps.
 
