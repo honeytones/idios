@@ -513,7 +513,7 @@ const MainPage: React.FC = () => {
     setRefundError(false);
 
     try {
-      setRefundStatus('Refunding — please approve in your Beam wallet...');
+      setRefundStatus('Refunding, please approve in your Beam wallet...');
       await refundJob(
         parseInt(viewJobId),
         jobInfo.payment || 0,
@@ -580,7 +580,7 @@ const MainPage: React.FC = () => {
         </SettlementOptions>
         <SettlementDesc>
           {settlement === 'review'
-            ? 'You review the work and approve, with arbitrator backstop if you dispute. Best for non deterministic or open ended tasks.'
+            ? 'You review the work and approve, with M of N arbitration backstop if you dispute. Best for non deterministic or open ended tasks.'
             : 'Settles immediately when node delivers matching result hash. Best for deterministic tasks.'}
         </SettlementDesc>
       </Section>
@@ -655,7 +655,7 @@ const MainPage: React.FC = () => {
             <div>
               <Label>Dispute Fee (BEAM)</Label>
               <Input placeholder="e.g. 0.01" value={disputeFee} onChange={e => setDisputeFee(e.target.value)} />
-              <HintText>Locked if you dispute. Refunded if arbitrator sides with you, paid to worker if not.</HintText>
+              <HintText>Locked if you dispute. It pays the voting arbitrators win or lose. The dispute winner receives payment plus collateral.</HintText>
             </div>
           </Row>
         </Section>

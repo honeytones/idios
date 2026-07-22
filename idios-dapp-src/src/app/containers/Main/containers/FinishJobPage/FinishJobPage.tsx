@@ -392,7 +392,7 @@ const FinishJobPage: React.FC = () => {
         </SettlementOptions>
         <SettlementDesc>
           {settlement === 'review'
-            ? 'Client reviews work and approves, with arbitrator backstop. Best for non deterministic or open ended tasks.'
+            ? 'Client reviews work and approves, with M of N arbitration backstop. Best for non deterministic or open ended tasks.'
             : 'Settles immediately when you deliver matching result hash. Best for deterministic tasks.'}
         </SettlementDesc>
       </Section>
@@ -459,7 +459,7 @@ const FinishJobPage: React.FC = () => {
             <div>
               <Label>Dispute Fee (BEAM)</Label>
               <Input placeholder="e.g. 0.01" value={disputeFee} onChange={e => setDisputeFee(e.target.value)} />
-              <HintText>Locked by client if they dispute. Refunded if arbitrator sides with them, paid to you if not.</HintText>
+              <HintText>Locked by the client if they dispute. It pays the voting arbitrators win or lose. The dispute winner receives payment plus collateral.</HintText>
             </div>
           </Row>
         </Section>

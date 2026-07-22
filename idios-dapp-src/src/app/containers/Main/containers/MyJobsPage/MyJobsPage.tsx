@@ -895,7 +895,7 @@ const MyJobsPage: React.FC = () => {
             <ModalSubtitle>
               The Idios agent daemon is a small Python program you run on your own computer that watches this
               contract's status on chain and fires the right actions automatically (commit, submit_delivery,
-              approve, claim, refund, resolve). One-time setup, then walk away.
+              approve, claim, refund). One time setup, then walk away.
             </ModalSubtitle>
             <ModalNote>
               You're tracked as <strong>{exportJob.role}</strong> on this contract. Pick the role you want the daemon

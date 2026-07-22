@@ -153,19 +153,101 @@ export async function getUserKey() {
         }, shader);
     });
 }
-export async function resolveToAlice(job_id) {
+// M of N arbitration (v2). A dispute is resolved when a majority of the
+// registry frozen onto it vote the same side. side: 0 = requester (Alice),
+// 1 = worker (Bob). arb_index selects which of this wallet's arbitrator
+// identities signs; separate wallets all use index 0.
+export async function voteDispute(job_id, side, arb_index = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=arbitrator,action=resolve_alice,cid=${CID},job_id=${job_id}`;
+        const args = `role=arbitrator,action=vote,cid=${CID},job_id=${job_id},side=${side},arb_index=${arb_index}`;
         invokeContract(args, resolve, reject);
     });
 }
 
-export async function resolveToBob(job_id) {
+// After resolution, each consensus voter claims their share of the dispute
+// fee (fee divided by the threshold M). Fails on chain for a non voter, a
+// minority voter, or a second claim.
+export async function claimArbReward(job_id, arb_index = 0) {
     await loadShader();
     return new Promise((resolve, reject) => {
-        const args = `role=arbitrator,action=resolve_bob,cid=${CID},job_id=${job_id}`;
+        const args = `role=arbitrator,action=claim_reward,cid=${CID},job_id=${job_id},arb_index=${arb_index}`;
         invokeContract(args, resolve, reject);
+    });
+}
+
+// Per dispute M of N state. Resolves null when the job has no dispute record.
+export async function viewDispute(job_id) {
+    await loadShader();
+    return new Promise((resolve) => {
+        const args = `role=manager,action=view_dispute,cid=${CID},job_id=${job_id}`;
+        Utils.invokeContract(args, (err, result, full) => {
+            try {
+                const raw = full && full.result && full.result.output;
+                if (raw) {
+                    const parsed = JSON.parse('{' + raw + '}');
+                    if (parsed.dispute) return resolve(parsed.dispute);
+                }
+            } catch(e) {}
+            resolve(null);
+        }, shader);
+    });
+}
+
+// This wallet's arbitrator registration at the given index. Resolves null
+// when no arbitrator is registered under that key.
+export async function viewArb(arb_index = 0) {
+    await loadShader();
+    return new Promise((resolve) => {
+        const args = `role=arbitrator,action=view_arb,cid=${CID},arb_index=${arb_index}`;
+        Utils.invokeContract(args, (err, result, full) => {
+            try {
+                const raw = full && full.result && full.result.output;
+                if (raw) {
+                    const parsed = JSON.parse('{' + raw + '}');
+                    if (parsed.arb) return resolve(parsed.arb);
+                }
+            } catch(e) {}
+            resolve(null);
+        }, shader);
+    });
+}
+
+// This wallet's M of N arbitrator pubkey at the given index.
+export async function getMofnKey(arb_index = 0) {
+    await loadShader();
+    return new Promise((resolve, reject) => {
+        const args = `role=arbitrator,action=get_mofn_key,cid=${CID},arb_index=${arb_index}`;
+        Utils.invokeContract(args, (err, result, full) => {
+            try {
+                const raw = full && full.result && full.result.output;
+                if (raw) {
+                    const parsed = JSON.parse('{' + raw + '}');
+                    const pk = parsed.key && parsed.key.pub_key;
+                    if (pk) return resolve(pk);
+                }
+            } catch(e) {}
+            if (err) return reject(new Error(JSON.stringify(err)));
+            resolve(result);
+        }, shader);
+    });
+}
+
+// Live registry size N. A dispute freezes this as its quorum base.
+export async function viewRegCount() {
+    await loadShader();
+    return new Promise((resolve) => {
+        const args = `role=manager,action=view_regcount,cid=${CID}`;
+        Utils.invokeContract(args, (err, result, full) => {
+            try {
+                const raw = full && full.result && full.result.output;
+                if (raw) {
+                    const parsed = JSON.parse('{' + raw + '}');
+                    if (parsed.regcount) return resolve(Number(parsed.regcount.n_registered) || 0);
+                }
+            } catch(e) {}
+            resolve(0);
+        }, shader);
     });
 }
 
