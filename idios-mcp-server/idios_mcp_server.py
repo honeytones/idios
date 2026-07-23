@@ -49,6 +49,9 @@ import logging
 import subprocess
 import threading
 import argparse
+import urllib.request
+import urllib.parse
+import urllib.error
 from typing import Optional
 
 # Suppress mcp library logging to keep stdio clean.
@@ -62,6 +65,10 @@ except ImportError:
     sys.exit(1)
 
 SHADER_TIMEOUT_SECONDS = 600
+
+# Idios marketplace API (Cloudflare worker in front of the listings backend).
+# Override with a "market_url" key in the config if it ever moves.
+DEFAULT_MARKET_URL = "https://idios-market-worker.idios-market.workers.dev"
 
 STATUS_NAMES = {
     0: "Open",
@@ -1297,6 +1304,125 @@ def view_worker_reputation(worker_pk: str = "", payment: int = 0) -> str:
         }
 
     return json.dumps(card, indent=2)
+
+
+def _market_fetch(table: str):
+    """GET the marketplace worker for a table, return the records list."""
+    base = _cfg.get("market_url", DEFAULT_MARKET_URL)
+    url = base + "?table=" + urllib.parse.quote(table)
+    req = urllib.request.Request(url, headers={"User-Agent": "idios-mcp-server"})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        data = json.loads(resp.read().decode())
+    return data.get("records", [])
+
+
+@mcp.tool()
+def find_workers(skill: str = "", bonded_only: bool = False) -> str:
+    """
+    Discover workers on the Idios marketplace to hire for a contract.
+
+    Fetches the public worker listings (name, skills, rate, availability,
+    contact, Beam pubkey, bonded status) so an agent can find a counterparty,
+    then verify and hire them:
+
+    1. Call this to find candidates, filtering by skill if you know what you
+       need.
+    2. For any candidate with a pubkey, call view_worker_bond with that
+       pubkey to verify their bond ON CHAIN yourself. The Bonded flag here is
+       operator reviewed at listing time; the chain is the live truth.
+    3. Optionally call view_worker_reputation for this server's observed
+       history with that worker and a suggested collateral.
+    4. Agree terms with the worker off chain (their listed contact, or Beam
+       wallet messaging), then create_contract_b with their pubkey.
+
+    A listed pubkey is the worker's key on the production Idios contract.
+    This is a plain HTTPS fetch of public listings, nothing on chain and no
+    wallet involvement.
+
+    Args:
+        skill: Optional case insensitive filter matched against each
+            worker's name, skills, and description.
+        bonded_only: If true, only return workers whose listing carries the
+            Bonded flag.
+
+    Returns the matching listings as JSON, or a message if none match.
+    """
+    try:
+        records = _market_fetch("Workers")
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        return "Error fetching marketplace listings: {}".format(e)
+    out = []
+    q = skill.strip().lower()
+    for rec in records:
+        f = rec.get("fields", {}) or {}
+        if bonded_only and not f.get("Bonded"):
+            continue
+        if q:
+            hay = " ".join(str(f.get(k, "")) for k in ("Name", "Skills", "Description")).lower()
+            if q not in hay:
+                continue
+        out.append({
+            "name": f.get("Name", ""),
+            "skills": [s.strip() for s in str(f.get("Skills", "")).split(",") if s.strip()],
+            "rate": f.get("Rate", ""),
+            "availability": f.get("Availability", ""),
+            "contact": f.get("Contact", ""),
+            "description": f.get("Description", ""),
+            "worker_pubkey": f.get("Beam Pubkey", ""),
+            "bonded_listed": bool(f.get("Bonded")),
+        })
+    if not out:
+        return "No workers match. {} listings total; try without filters.".format(len(records))
+    return json.dumps({
+        "workers": out,
+        "next_step": "Verify any candidate's bond on chain with view_worker_bond(worker_pubkey) before hiring.",
+    }, indent=2)
+
+
+@mcp.tool()
+def find_market_jobs(skill: str = "") -> str:
+    """
+    Discover open job postings on the Idios marketplace to work on.
+
+    The requester side mirror of find_workers: fetches public job listings
+    (title, skills needed, budget, asset, description, contact) so a worker
+    agent can find work. Agree terms with the poster off chain via their
+    listed contact, share your Idios pubkey (get_key), and they create the
+    contract with you as the worker. Consider registering a worker bond
+    (worker_register) first; bonded workers are easier to hire.
+
+    This is a plain HTTPS fetch of public listings, nothing on chain and no
+    wallet involvement.
+
+    Args:
+        skill: Optional case insensitive filter matched against each job's
+            title, skills needed, and description.
+
+    Returns the matching listings as JSON, or a message if none match.
+    """
+    try:
+        records = _market_fetch("Jobs")
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        return "Error fetching marketplace listings: {}".format(e)
+    out = []
+    q = skill.strip().lower()
+    for rec in records:
+        f = rec.get("fields", {}) or {}
+        if q:
+            hay = " ".join(str(f.get(k, "")) for k in ("Title", "Skills Needed", "Description")).lower()
+            if q not in hay:
+                continue
+        out.append({
+            "title": f.get("Title", ""),
+            "skills_needed": [s.strip() for s in str(f.get("Skills Needed", "")).split(",") if s.strip()],
+            "budget": f.get("Budget", ""),
+            "asset": f.get("Asset", ""),
+            "description": f.get("Description", ""),
+            "contact": f.get("Contact", ""),
+        })
+    if not out:
+        return "No jobs match. {} listings total; try without filters.".format(len(records))
+    return json.dumps({"jobs": out}, indent=2)
 
 
 def load_config(path: str) -> dict:

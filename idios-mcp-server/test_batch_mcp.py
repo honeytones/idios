@@ -4,17 +4,23 @@ Live test for the batch_create_contracts MCP tool, on the TEST cid only.
 
 Drives the real MCP server over stdio against a real wallet:
   1. get_chain_info, get_key
-  2. batch_create_contracts with two small Mode B specs (self dealing,
-     worker pubkey = own key)
-  3. view both contracts, expect Open
-  4. commit_collateral on both
-  5. mutual_cancel both (self deal satisfies both signatures), draining all
-     funds straight back to the wallet
-  6. view both, expect Cancelled
+  2. batch_create_contracts with --count small Mode B specs (self dealing,
+     worker pubkey = own key), count 1 to 50, default 2
+  3. view each contract, expect Open
+  4. drain, two modes:
+     cancel (default): commit_collateral then mutual_cancel per job,
+       final state Cancelled. Two transactions per job, slow at high counts.
+     refund: refund_contract per job straight from Open, no commit,
+       final state Refunded. One transaction per job, use this for big runs.
+  5. view each, expect the drain mode's final state
 
 Usage:
   read -s -p "Wallet password: " IDIOS_WALLET_PASS && export IDIOS_WALLET_PASS && echo
   python3 test_batch_mcp.py --config /path/to/test_cid_config.json --job-base 88801
+  python3 test_batch_mcp.py --config ... --job-base 90001 --count 50 --drain refund --payment 1000000
+
+A 50 count refund run is about 51 sequential chain confirmed transactions,
+expect 60 to 90 minutes unattended and roughly 1.1 BEAM in fees total.
 
 The config MUST point at the test cid, never production. State changing
 calls wait for chain confirmation, so the whole run takes several minutes.
@@ -115,7 +121,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     ap.add_argument("--job-base", type=int, default=88801)
+    ap.add_argument("--count", type=int, default=2, help="number of specs in the batch, 1 to 50")
+    ap.add_argument("--drain", choices=("cancel", "refund"), default="cancel",
+                    help="cancel: commit then mutual_cancel per job. refund: refund from Open, one tx per job")
+    ap.add_argument("--payment", type=int, default=PAYMENT, help="payment per job in groth")
+    ap.add_argument("--drain-only", action="store_true",
+                    help="skip creation, drain existing jobs job-base..job-base+count-1. Refund needs the chain past each job's expiry_block")
     args = ap.parse_args()
+    if not 1 <= args.count <= 50:
+        print("--count must be 1 to 50 (contract nMaxCount is 50).", file=sys.stderr)
+        sys.exit(1)
 
     password = os.environ.get("IDIOS_WALLET_PASS")
     if not password:
@@ -128,8 +143,7 @@ def main():
         sys.exit(1)
 
     server = os.path.join(os.path.dirname(os.path.abspath(__file__)), "idios_mcp_server.py")
-    job_a = args.job_base
-    job_b = args.job_base + 1
+    job_ids = list(range(args.job_base, args.job_base + args.count))
 
     client = McpClient(server, args.config, password)
     try:
@@ -148,42 +162,63 @@ def main():
             print("Could not parse pubkey, aborting before any funds move.", file=sys.stderr)
             sys.exit(1)
 
-        for jid in (job_a, job_b):
-            state = client.call_tool("view_contract", {"job_id": jid})
-            if '"job_id"' in state:
-                print("Job id {} already exists on this cid. Rerun with a different --job-base.".format(jid), file=sys.stderr)
-                sys.exit(1)
+        if not args.drain_only:
+            for jid in job_ids:
+                state = client.call_tool("view_contract", {"job_id": jid})
+                if '"job_id"' in state:
+                    print("Job id {} already exists on this cid. Rerun with a different --job-base.".format(jid), file=sys.stderr)
+                    sys.exit(1)
 
         specs = []
-        for jid in (job_a, job_b):
+        for jid in job_ids:
             specs.append({
                 "job_id": jid, "worker_pubkey": pk,
-                "payment": PAYMENT, "asset_id": 0,
+                "payment": args.payment, "asset_id": 0,
                 "expiry_block": expiry, "dispute_fee": DISPUTE_FEE,
                 "review_window_blocks": REVIEW_WINDOW,
             })
-        result = client.call_tool("batch_create_contracts", {"specs": specs})
-        step("batch create", result)
-        if result.startswith("Error"):
-            sys.exit(1)
+        if not args.drain_only:
+            result = client.call_tool("batch_create_contracts", {"specs": specs})
+            step("batch create", result)
+            if result.startswith("Error"):
+                sys.exit(1)
 
-        time.sleep(10)
-        for jid in (job_a, job_b):
-            step("view {} after create".format(jid), client.call_tool("view_contract", {"job_id": jid}))
+            time.sleep(10)
+            view_after = job_ids if args.count <= 5 else [job_ids[0], job_ids[-1]]
+            for jid in view_after:
+                step("view {} after create".format(jid), client.call_tool("view_contract", {"job_id": jid}))
 
-        for jid in (job_a, job_b):
-            step("commit {}".format(jid), client.call_tool("commit_collateral", {"job_id": jid, "collateral": COLLATERAL}))
-
-        for jid in (job_a, job_b):
-            step("mutual cancel {}".format(jid), client.call_tool("mutual_cancel", {"job_id": jid}))
+        if args.drain == "cancel":
+            for jid in job_ids:
+                step("commit {}".format(jid), client.call_tool("commit_collateral", {"job_id": jid, "collateral": COLLATERAL}))
+            for jid in job_ids:
+                step("mutual cancel {}".format(jid), client.call_tool("mutual_cancel", {"job_id": jid}))
+            want = "Cancelled"
+        else:
+            first = client.call_tool("view_contract", {"job_id": job_ids[0]})
+            if "Refunded" not in first and "Open" not in first and "Active" not in first:
+                print("Job {} is not refundable (state below). Aborting drain.".format(job_ids[0]), file=sys.stderr)
+                print(first, file=sys.stderr)
+                sys.exit(1)
+            for i, jid in enumerate(job_ids, 1):
+                state = client.call_tool("view_contract", {"job_id": jid})
+                if "Refunded" in state:
+                    print("== refund {} ({} of {}) == already Refunded, skipping".format(jid, i, len(job_ids)))
+                    continue
+                step("refund {} ({} of {})".format(jid, i, len(job_ids)), client.call_tool("refund_contract", {"job_id": jid}))
+            want = "Refunded"
 
         ok = True
-        for jid in (job_a, job_b):
+        bad = []
+        for jid in job_ids:
             state = client.call_tool("view_contract", {"job_id": jid})
-            step("final state {}".format(jid), state)
-            if "Cancelled" not in state:
+            if want not in state:
                 ok = False
-        print("RESULT: {}".format("PASS, both contracts Cancelled, funds drained back" if ok else "CHECK NEEDED, a contract is not Cancelled"))
+                bad.append(jid)
+                step("final state {}".format(jid), state)
+        print("RESULT: {}".format(
+            "PASS, all {} contracts {}, funds drained back".format(len(job_ids), want) if ok
+            else "CHECK NEEDED, not {}: {}".format(want, bad)))
         sys.exit(0 if ok else 2)
     finally:
         client.close()
