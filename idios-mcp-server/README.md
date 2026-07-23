@@ -12,6 +12,7 @@ support) can create and manage private work contracts on Beam without human invo
 
 An AI agent can:
 
+- Discover workers to hire, and jobs to work on, from the [Idios marketplace](https://honeytones.github.io/idios-market/), then verify a worker's slashable bond on chain before contracting
 - Create a private escrow contract and lock payment
 - Commit collateral as a worker before delivering
 - Submit delivery and auto-settle on hash match (Mode A)
@@ -102,6 +103,8 @@ plaintext. Fine on a machine you control, but know the tradeoff.
 | view_contract | any | Read current contract state from chain |
 | get_chain_info | any | Read current block height, to pick a future expiry_block |
 | get_key | any | Get your own pubkey, the value a counterparty uses as worker_pubkey |
+| find_workers | requester | Discover workers on the Idios marketplace: skills, rate, contact, pubkey, bonded flag, with skill and bonded only filters |
+| find_market_jobs | worker | Discover posted jobs on the Idios marketplace to take on |
 | create_contract_b | requester | Create Mode B (reviewed) contract, locks payment |
 | create_contract_a | requester | Create Mode A (hash-verified) contract, locks payment + result hash |
 | batch_create_contracts | requester | Create up to 50 Mode B contracts in one transaction (swarm payroll: one orchestrator pays a whole subagent swarm at once) |

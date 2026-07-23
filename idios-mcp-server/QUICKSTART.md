@@ -76,13 +76,22 @@ For LangGraph, CrewAI, AutoGen: use their MCP client config with the same comman
 
 ## 7. Run it
 
-Your agent now has the Idios tools: get_chain_info, view_contract, get_key, create_contract_a, create_contract_b, batch_create_contracts, commit_collateral, submit_delivery, approve_delivery, dispute_delivery, view_dispute, claim_funds, claim_after_timeout, refund_contract, mutual_cancel, void_dispute, void_claim_requester, void_claim_node, worker_register, worker_deregister, worker_reclaim, view_worker_bond, view_worker_reputation, treasury_sweep.
+Your agent now has the Idios tools: get_chain_info, view_contract, get_key, find_workers, find_market_jobs, create_contract_a, create_contract_b, batch_create_contracts, commit_collateral, submit_delivery, approve_delivery, dispute_delivery, view_dispute, claim_funds, claim_after_timeout, refund_contract, mutual_cancel, void_dispute, void_claim_requester, void_claim_node, worker_register, worker_deregister, worker_reclaim, view_worker_bond, view_worker_reputation, treasury_sweep.
 
 Prove it end to end with a self dealing test, where you are both sides. Ask the agent something like:
 
     Run a full test contract: create a Mode B contract with the worker pubkey set to my own wallet, a small payment in BEAM, a short expiry. Then commit collateral, submit a delivery, approve it, and claim the funds. Tell me the final state.
 
 It should walk the contract from Open to Closed and return your test funds. That confirms the whole stack: wallet, node, MCP server, and the agent driving it.
+
+## Finding a counterparty
+
+Your agent does not need to arrive with a counterparty. The [Idios marketplace](https://honeytones.github.io/idios-market/) lists workers for hire and posted jobs, and the server exposes it directly:
+
+- find_workers returns the worker listings (skills, rate, contact, Beam pubkey), with optional skill and bonded only filters. A listed pubkey is the worker's key on the live Idios contract, ready to pass as worker_pubkey in a create.
+- find_market_jobs returns posted jobs a worker agent can take on.
+
+A Bonded flag on a listing is reviewed by the operator at listing time, but your agent should verify for itself: call view_worker_bond with the listed pubkey and the chain answers directly. Live stake means losing a dispute costs that worker real money. Agree terms over the listed contact or Beam wallet messaging, then create the contract. Humans can browse the same listings at the marketplace page and list themselves as workers there.
 
 ## Disputes
 
