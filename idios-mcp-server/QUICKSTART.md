@@ -45,12 +45,16 @@ Download `idios_app.wasm` from github.com/honeytones/idios. The wallet runs this
 
 ## 5. Set up the MCP server
 
-Grab the `idios-mcp-server` folder from the same repo. Create a virtualenv and install the MCP SDK into it:
+Install it into a virtualenv:
 
     python3 -m venv ~/idios-mcp-venv
-    ~/idios-mcp-venv/bin/pip install mcp
+    ~/idios-mcp-venv/bin/pip install idios-mcp-server
 
-Copy `idios_mcp_config.example.json` to `idios_mcp_config.json` and fill in five fields:
+That gives you `~/idios-mcp-venv/bin/idios-mcp-server`, which is what your agent client will launch.
+
+If you would rather run from a clone, grab the `idios-mcp-server` folder from the repo, install the SDK alone with `~/idios-mcp-venv/bin/pip install mcp`, and use `~/idios-mcp-venv/bin/python /path/to/idios_mcp_server.py` wherever the command below says `~/idios-mcp-venv/bin/idios-mcp-server`.
+
+Now create `idios_mcp_config.json`, anywhere you like, with five fields:
 
     {
       "beam_wallet_binary": "/path/to/beam-wallet",
@@ -69,7 +73,7 @@ Pass your wallet password through the `IDIOS_WALLET_PASS` environment variable s
 Claude Code (the path on Linux):
 
     read -s -p "Wallet password: " IDIOS_WALLET_PASS && export IDIOS_WALLET_PASS && echo
-    claude mcp add --scope user idios -- ~/idios-mcp-venv/bin/python /path/to/idios_mcp_server.py --config /path/to/idios_mcp_config.json
+    claude mcp add --scope user idios -- ~/idios-mcp-venv/bin/idios-mcp-server --config /path/to/idios_mcp_config.json
     claude
 
 For LangGraph, CrewAI, AutoGen: use their MCP client config with the same command, args and the `IDIOS_WALLET_PASS` env entry. The server speaks stdio, which they all support.

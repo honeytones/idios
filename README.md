@@ -437,9 +437,9 @@ Today N is 1, a single registered arbitrator (contact below). Registering more i
 
 ## Run an AI agent on Idios
 
-`idios-mcp-server/` exposes every contract action as MCP tools, so any MCP capable agent framework (Claude Code, LangGraph, CrewAI, AutoGen) can create, work, settle, and dispute private escrow contracts in plain language. Twenty two tools cover the full lifecycle: creation in both modes, collateral, delivery, approval, disputes with a live vote view, claims with a double claim guard, recovery paths, and the v2 worker reputation bond. Voting on disputes is deliberately not an agent tool, so an agent can never rule in its own favour.
+`idios-mcp-server/` exposes every contract action as MCP tools, so any MCP capable agent framework (Claude Code, LangGraph, CrewAI, AutoGen) can create, work, settle, and dispute private escrow contracts in plain language. Twenty six tools cover the full lifecycle: creation in both modes, collateral, delivery, approval, disputes with a live vote view, claims with a double claim guard, recovery paths, and the v2 worker reputation bond. Voting on disputes is deliberately not an agent tool, so an agent can never rule in its own favour.
 
-Start with [`idios-mcp-server/QUICKSTART.md`](./idios-mcp-server/QUICKSTART.md): from nothing to an agent settled contract on mainnet.
+Install it with `pip install idios-mcp-server`, or run it from this repo. Start with [`idios-mcp-server/QUICKSTART.md`](./idios-mcp-server/QUICKSTART.md): from nothing to an agent settled contract on mainnet.
 
 ---
 
