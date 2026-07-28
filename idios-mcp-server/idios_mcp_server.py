@@ -370,6 +370,103 @@ def view_contract(job_id: int) -> str:
     return json.dumps(job, indent=2)
 
 
+SYNC_TIMEOUT_SECONDS = 30
+
+
+def _node_height() -> tuple:
+    """
+    Get the real node tip by running beam-wallet listen just long enough to
+    sync, reading the tip off its sync log, then killing it.
+
+    'beam-wallet info' does NOT do this. Its "Current height" line is the
+    wallet database's own stored tip, which only advances when the wallet
+    actually completes a sync with the node, and a plain info read does not
+    trigger one. Observed 28 July 2026: info reported 3960294 while the chain
+    was at 3967082, a gap of 6788 blocks (about 4.7 days). info emits no sync
+    lines at all, so there is no fresher signal in its output to recover.
+    listen connects, syncs in about a second, and logs the tip as
+    "Sync up to N-hash" then "Current state is N-hash".
+
+    Returns (height, "node") on success, or (None, reason) on failure.
+    """
+    import os, re, subprocess
+    cmd = [
+        _cfg["beam_wallet_binary"], "listen",
+        "--node_addr=" + _cfg["node_addr"],
+        "--wallet_path=" + _cfg["wallet_path"],
+        "--pass=" + _password,
+    ]
+    pat = re.compile(r"(?:Sync up to|Current state is)\s+(\d+)-")
+    best = None
+    proc = None
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=os.path.dirname(_cfg["beam_wallet_binary"]),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        killer = threading.Timer(SYNC_TIMEOUT_SECONDS, proc.kill)
+        killer.start()
+        try:
+            for line in proc.stdout:
+                m = pat.search(line)
+                if m:
+                    h = int(m.group(1))
+                    if best is None or h > best:
+                        best = h
+                    # "Current state is" means the sync round completed.
+                    if "Current state is" in line:
+                        break
+        finally:
+            killer.cancel()
+    except Exception as e:
+        return None, "could not run beam-wallet listen: " + str(e)
+    finally:
+        if proc is not None:
+            try:
+                proc.kill()
+                proc.wait(timeout=10)
+            except Exception:
+                pass
+    if best is None:
+        return None, "the wallet did not sync with {} within {}s".format(
+            _cfg["node_addr"], SYNC_TIMEOUT_SECONDS)
+    return best, "node"
+
+
+def _db_height() -> Optional[int]:
+    """
+    Read the wallet database's stored height via beam-wallet info. This value
+    can be days stale. Only ever used as a clearly labelled fallback.
+    """
+    import os, re, subprocess
+    cmd = [
+        _cfg["beam_wallet_binary"], "info",
+        "--node_addr=" + _cfg["node_addr"],
+        "--wallet_path=" + _cfg["wallet_path"],
+        "--pass=" + _password,
+    ]
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=os.path.dirname(_cfg["beam_wallet_binary"]),
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except Exception:
+        return None
+    out = result.stdout + result.stderr
+    # Line shape is "Current height............3960294". Match the digits that
+    # follow the label; never strip all digits from the line, because any other
+    # number on it would be concatenated into a garbage height.
+    m = re.search(r"Current height[.\s]*(\d+)", out)
+    return int(m.group(1)) if m else None
+
+
 @mcp.tool()
 def get_chain_info() -> str:
     """
@@ -382,41 +479,25 @@ def get_chain_info() -> str:
 
     Returns the current block height, or an error message.
     """
-    import os, re, subprocess
-    cmd = [
-        _cfg["beam_wallet_binary"], "info",
-        "--node_addr=" + _cfg["node_addr"],
-        "--wallet_path=" + _cfg["wallet_path"],
-        "--pass=" + _password,
-    ]
-    try:
-        with _shader_lock:
-            result = subprocess.run(
-                cmd,
-                cwd=os.path.dirname(_cfg["beam_wallet_binary"]),
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-    except Exception as e:
-        return "Error reading chain info: " + str(e)
-    out = result.stdout + result.stderr
-    # The wallet DB's "Current height" can be DAYS stale until the wallet
-    # syncs. The sync log lines ("Sync up to N-hash", "Current state is
-    # N-hash") carry the node tip. Collect every height signal and take the
-    # maximum, which is correct whichever line is stale.
-    heights = []
-    for line in out.splitlines():
-        if "Current height" in line:
-            digits = "".join(ch for ch in line if ch.isdigit())
-            if digits:
-                heights.append(int(digits))
-        m = re.search(r"(?:Sync up to|Current state is)\s+(\d+)-", line)
-        if m:
-            heights.append(int(m.group(1)))
-    if heights:
-        return "Current block height: {}. For expiry_block add a margin (current + 10000 is about 7 days, current + 2000 is a short test).".format(max(heights))
-    return "Could not read the current height from wallet info."
+    with _shader_lock:
+        height, source = _node_height()
+        if height is None:
+            stale = _db_height()
+        else:
+            stale = None
+    if height is not None:
+        return (
+            "Current block height: {}, synced from the node just now. "
+            "For expiry_block add a margin (current + 10000 is about 7 days, "
+            "current + 2000 is a short test)."
+        ).format(height)
+    if stale is not None:
+        return (
+            "UNVERIFIED height {} read from the wallet database, and it may be "
+            "DAYS old. The wallet could not sync: {}. Do NOT compute an "
+            "expiry_block from this number. Retry, or check the node at {}."
+        ).format(stale, source, _cfg["node_addr"])
+    return "Could not read the current height. " + source
 
 
 @mcp.tool()

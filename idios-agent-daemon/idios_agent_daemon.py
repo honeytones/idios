@@ -62,6 +62,7 @@ import time
 import logging
 import getpass
 import subprocess
+import threading
 import re
 from pathlib import Path
 from datetime import datetime
@@ -301,43 +302,97 @@ def shader_view_params(cfg, password, logger):
     return parsed.get("params") or parsed
 
 
-def get_current_height(cfg, password, logger):
-    """Read the current block height via beam-wallet info, parsing the
-    'Current height' line. Returns int height, or None on any failure."""
+SYNC_TIMEOUT_SECONDS = 30
+SYNC_MAX_AGE_SECONDS = 300
+
+# Last node verified height and the monotonic time it was taken.
+_height_cache = {"height": None, "at": None}
+
+
+def sync_node_height(cfg, password, logger):
+    """Get the real node tip by running beam-wallet listen just long enough to
+    sync, reading the tip off its sync log, then killing it.
+
+    'beam-wallet info' does NOT do this. Its "Current height" is the wallet
+    database's stored tip, which only advances when the wallet completes a
+    sync, and a plain read does not trigger one. Observed 28 July 2026: info
+    reported 3960294 while the chain was at 3967082, a gap of 6788 blocks,
+    about 4.7 days. info emits no sync lines at all, so nothing fresher can be
+    recovered from its output. listen connects, syncs in about a second, and
+    logs "Sync up to N-hash" then "Current state is N-hash".
+
+    Returns int height, or None if the wallet could not sync."""
     cmd = [
-        cfg["beam_wallet_binary"], "info",
+        cfg["beam_wallet_binary"], "listen",
         "--node_addr=" + cfg["node_addr"],
         "--wallet_path=" + cfg["wallet_path"],
         "--pass=" + password,
     ]
+    pat = re.compile(r"(?:Sync up to|Current state is)\s+(\d+)-")
+    best = None
+    proc = None
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             cmd,
             cwd=os.path.dirname(cfg["beam_wallet_binary"]),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=120,
+            bufsize=1,
         )
+        killer = threading.Timer(SYNC_TIMEOUT_SECONDS, proc.kill)
+        killer.start()
+        try:
+            for line in proc.stdout:
+                m = pat.search(line)
+                if m:
+                    h = int(m.group(1))
+                    if best is None or h > best:
+                        best = h
+                    if "Current state is" in line:
+                        break
+        finally:
+            killer.cancel()
     except Exception as e:
-        logger.warning("could not read chain height: %s", e)
+        logger.warning("could not run beam-wallet listen to sync: %s", e)
         return None
-    out = proc.stdout + proc.stderr
-    # The wallet DB's "Current height" can be DAYS stale until the wallet
-    # syncs; the sync log lines carry the node tip. Collect every height
-    # signal and take the maximum (same fix as the MCP server).
-    heights = []
-    for line in out.splitlines():
-        if "Current height" in line:
-            digits = "".join(ch for ch in line if ch.isdigit())
-            if digits:
-                heights.append(int(digits))
-        m = re.search(r"(?:Sync up to|Current state is)\s+(\d+)-", line)
-        if m:
-            heights.append(int(m.group(1)))
-    if heights:
-        return max(heights)
-    logger.warning("could not parse any height signal from wallet info output")
-    return None
+    finally:
+        if proc is not None:
+            try:
+                proc.kill()
+                proc.wait(timeout=10)
+            except Exception:
+                pass
+    if best is None:
+        logger.warning("wallet did not sync with %s within %ss",
+                       cfg["node_addr"], SYNC_TIMEOUT_SECONDS)
+    return best
+
+
+def get_current_height(cfg, password, logger):
+    """Return a node verified block height, or None.
+
+    Never returns the wallet database's stored height. A stale height silently
+    mistimes the auto refund and auto void triggers, so when the wallet cannot
+    sync this returns None and the caller disables those triggers for the
+    cycle, which is the safe direction.
+
+    Syncs at most every SYNC_MAX_AGE_SECONDS and serves the cached height in
+    between, so a 30 second poll loop does not hold a listen open permanently.
+    A cached height is at most five minutes (about five blocks) behind, which
+    is well inside the margin those triggers need."""
+    now = time.monotonic()
+    cached, at = _height_cache["height"], _height_cache["at"]
+    if cached is not None and at is not None and (now - at) < SYNC_MAX_AGE_SECONDS:
+        return cached
+    height = sync_node_height(cfg, password, logger)
+    if height is None:
+        logger.warning("no verified chain height this cycle; "
+                       "height driven triggers are disabled until the wallet syncs")
+        return None
+    _height_cache["height"] = height
+    _height_cache["at"] = now
+    return height
 
 
 def shader_commit(cfg, password, job_id, collateral, asset_id, logger):
