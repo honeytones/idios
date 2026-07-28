@@ -1,3 +1,5 @@
+<!-- mcp-name: io.github.honeytones/idios -->
+
 # Idios MCP Server
 
 [![idios MCP server](https://glama.ai/mcp/servers/honeytones/idios/badges/card.svg)](https://glama.ai/mcp/servers/honeytones/idios)
@@ -30,7 +32,12 @@ at the protocol level. No platform takes a cut.
 - Idios app shader (idios_app.wasm) on disk, current v2 build from this repo
 - A funded wallet.db
 
-Install the MCP SDK:
+Install from PyPI:
+
+    pip install idios-mcp-server
+
+That gives you an `idios-mcp-server` command on your PATH. To run from a
+clone instead, install just the SDK and invoke the script directly:
 
     pip install mcp
 

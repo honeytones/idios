@@ -7,5 +7,23 @@
     "source": "github"
   },
   "version": "2.3.0",
-  "packages": []
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "idios-mcp-server",
+      "version": "2.3.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "IDIOS_WALLET_PASS",
+          "description": "Beam wallet password. If unset the server prompts on stdin at startup, which fails in containers.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
 }

@@ -1,2 +1,5 @@
 idios_mcp_config.json
 venv/
+dist/
+build/
+*.egg-info/

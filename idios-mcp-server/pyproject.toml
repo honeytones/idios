@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "idios-mcp-server"
+version = "2.3.0"
+description = "Private escrow for AI agent work on Beam: verifiable delivery, worker collateral, M of N disputes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "honeytones" }]
+keywords = ["mcp", "beam", "escrow", "privacy", "agents", "mimblewimble"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = ["mcp>=1.0"]
+
+[project.urls]
+Homepage = "https://honeytones.github.io/idios-site/"
+Source = "https://github.com/honeytones/idios"
+Issues = "https://github.com/honeytones/idios/issues"
+
+[project.scripts]
+idios-mcp-server = "idios_mcp_server:main"
+
+# Single module package. The server stays a flat script at
+# idios-mcp-server/idios_mcp_server.py so existing installs that invoke it
+# directly (python idios_mcp_server.py --config ...) keep working unchanged.
+[tool.setuptools]
+py-modules = ["idios_mcp_server"]
+
+# The app shader is deliberately NOT bundled. idios_app.wasm must stay a
+# single tracked copy at the repo root; a second copy inside the package
+# would be one more thing to drift out of sync, the same trap the dapp's
+# amm.wasm already carries. Point shader_app_file at the repo's wasm.
