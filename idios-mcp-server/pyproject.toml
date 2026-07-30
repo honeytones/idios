@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "idios-mcp-server"
-version = "2.3.1"
+version = "2.3.2"
 description = "Private escrow for AI agent work on Beam: verifiable delivery, worker collateral, M of N disputes."
 readme = "README.md"
 requires-python = ">=3.10"
