@@ -332,7 +332,7 @@ Each arbitrator slot has a distinct pubkey, derived via `MofnArbKeyID { tag 'N',
 
 ### Worker reputation bond (v2)
 
-A worker can lock a standing, slashable bond against their contract pubkey, the same key that takes jobs. The bond is the on chain half of Idios reputation: it costs nothing to hold if you work honestly (reclaimed in full on exit), and losing an arbitrated dispute forfeits the whole bond to the treasury. Any amount, BEAM only; an off chain score reader surfaces the bond size, so dust bonds advertise themselves.
+A worker can lock a standing, slashable bond against their contract pubkey, the same key that takes jobs. The bond is the on chain half of Idios reputation: it costs nothing to hold if you work honestly (reclaimed in full on exit), and losing an arbitrated dispute forfeits the whole bond to the treasury. Any amount, BEAM only; an off chain score reader surfaces the bond size, so dust bonds advertise themselves. Any requester can verify a listed bond directly on chain, no funds needed: see [docs/verify_worker_bond.md](./docs/verify_worker_bond.md).
 
 Mechanics: filing a dispute on a job whose worker holds a live bond encumbers the bond, which blocks reclaim until that dispute terminates, so a worker cannot deregister mid dispute and dodge a pending ruling. A quorum resolution to the requester slashes the whole bond (at most once); a resolution to the worker, or a dispute that voids on arbitrator timeout, releases the encumbrance and leaves the bond untouched. A bond registered after a dispute was filed is not at risk from that dispute. The full lifecycle, bond, encumbrance, slash, blocked reclaim, and treasury sweep, is proven with real funds on mainnet.
 
