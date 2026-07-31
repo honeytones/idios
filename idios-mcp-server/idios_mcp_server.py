@@ -37,7 +37,9 @@ Notes:
     - view_contract is read-only and fast.
     - The CID in config must match the deployed Idios contract (production v2
       is 41ef8be5...).
-    - expiry_block must be in the future. Use current_block + 10000 for ~7 days.
+    - expiry_block is not a soft deadline: once it passes the requester can
+      refund, and a committed worker who has not delivered forfeits their
+      collateral to the treasury. Use current_block + 10000 for ~7 days.
     - Amounts are in groth. 1 BEAM = 100,000,000 groth. NPH (asset_id=47) same.
 """
 
@@ -329,7 +331,7 @@ mcp = FastMCP(
         "Use these tools to create and manage private work contracts. "
         "Both sides lock funds before work starts. Amounts and parties stay private. "
         "All amounts are in groth (1 BEAM = 100,000,000 groth, NPH asset_id=47 same unit). "
-        "expiry_block must be in the future: use current block + 10000 for roughly 7 days. "
+        "expiry_block puts funds at risk, it is not a soft deadline: once it passes the requester can refund, and a committed worker who has not delivered forfeits collateral to the treasury. Use current block + 10000 for roughly 7 days. "
         "State-changing calls (commit, submit_delivery, approve, dispute, claim) "
         "wait for on-chain confirmation, usually one to two minutes, occasionally several. "
         "If a dispute is never resolved within the arbitrator timeout, recover "
@@ -560,7 +562,9 @@ def create_contract_b(
         worker_pubkey: Worker's Beam pubkey from their Idios dapp or get_key action.
         payment: Payment amount in groth (1 BEAM = 100,000,000 groth).
         asset_id: 0 for BEAM, 47 for NPH (USD-pegged stablecoin).
-        expiry_block: Block height when contract expires. Use current_block + 10000 for ~7 days.
+        expiry_block: Block height after which the requester can refund. A
+            committed worker who has not delivered by then forfeits their
+            collateral to the treasury. Use current_block + 10000 for ~7 days.
         review_window_blocks: How long requester has to approve/dispute after delivery.
             2000 blocks is roughly 33 hours. Pass 0 (or omit) to use the
             contract default set at deploy time.
@@ -631,7 +635,9 @@ def create_contract_a(
         worker_pubkey: Worker's Beam pubkey from their Idios dapp or get_key action.
         payment: Payment amount in groth (1 BEAM = 100,000,000 groth).
         asset_id: 0 for BEAM, 47 for NPH (USD-pegged stablecoin).
-        expiry_block: Block height when contract expires. Use current_block + 10000 for ~7 days.
+        expiry_block: Block height after which the requester can refund. A
+            committed worker who has not delivered by then forfeits their
+            collateral to the treasury. Use current_block + 10000 for ~7 days.
         result_hash: SHA-256 hash of the expected deliverable file (64-char hex string).
         required_collateral: Minimum collateral in groth the worker must commit.
             The contract rejects any commit below this floor. 0 (default) = no floor.
@@ -687,8 +693,9 @@ def batch_create_contracts(specs: list) -> str:
             (from their get_key).
         payment (int, required): payment in groth (1 BEAM = 100,000,000).
         asset_id (int, required): 0 for BEAM, 47 for NPH.
-        expiry_block (int, required): future block height. current + 10000
-            is roughly 7 days.
+        expiry_block (int, required): future block height. After it the
+            requester can refund and an undelivered worker forfeits collateral
+            to the treasury. current + 10000 is roughly 7 days.
         dispute_fee (int, required): locked if the requester disputes; it
             pays the voting arbitrators win or lose.
         review_window_blocks (int, optional, default 0): approval window
@@ -770,6 +777,11 @@ def commit_collateral(job_id: int, collateral: int) -> str:
 
     You must be the worker whose pubkey was used to create the contract.
     The asset type is read from chain, not from this call.
+
+    Check the contract's expiry_block before committing. If you have not
+    delivered by that block the requester can refund and your collateral is
+    forfeited to the treasury. Do not commit unless the remaining time is
+    enough to deliver.
 
     Args:
         job_id: The contract ID to commit to.
