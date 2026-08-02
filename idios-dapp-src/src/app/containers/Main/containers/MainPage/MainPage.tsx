@@ -620,7 +620,7 @@ const MainPage: React.FC = () => {
         </Row>
         <Label>Expiry Block</Label>
         <Input placeholder="e.g. 3990000" value={expiryBlock} onChange={e => setExpiryBlock(e.target.value.trim())} />
-        <HintText>Current Beam block + ~10,000 blocks ≈ 1 week</HintText>
+        <HintText>Current Beam block + ~10,000 blocks ≈ 1 week. Not a soft deadline: once it passes, the requester can refund, and a committed worker who has not delivered forfeits their collateral to the treasury.</HintText>
       </Section>
 
       {settlement === 'fast' && (
