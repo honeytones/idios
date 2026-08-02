@@ -68,6 +68,12 @@ The cid is the live Idios contract on Beam mainnet.
 
 ## 6. Wire it into your agent
 
+Before wiring anything, run the preflight doctor. Download [`idios_doctor.py`](https://github.com/honeytones/idios/blob/main/idios-mcp-server/idios_doctor.py) from the repo (raw file, same place you got the wasm) and point it at your config with the venv's python:
+
+    ~/idios-mcp-venv/bin/python idios_doctor.py --config /path/to/idios_mcp_config.json
+
+It checks everything the server needs (python version, the mcp package, the config file and its keys, the wallet binary, the wasm, the wallet.db, the node connection) and fails loudly with a fix for each problem, instead of the server dying silently and your agent client hanging at startup. Fix any FAIL lines before continuing. A warning about `IDIOS_WALLET_PASS` is expected here, the next paragraph exports it.
+
 Pass your wallet password through the `IDIOS_WALLET_PASS` environment variable so the server starts without a prompt. Export it in the shell before launching your agent, and the server inherits it.
 
 Claude Code (the path on Linux):
