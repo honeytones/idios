@@ -187,6 +187,8 @@ The simplest way to use Idios is through the Beam Desktop wallet's dapp store.
 3. Install the Idios dapp from the wallet's DApp Store, or sideload the latest [`.dapp` file from releases](https://github.com/honeytones/idios/releases/latest).
 4. Open Idios from your installed apps.
 
+**On Android:** Idios also runs on [PriviMW](https://github.com/PriviMW/PriviMW-Wallet), a community built Android wallet for Beam with its own DApp Store and encrypted messaging built in. Install the [latest APK](https://github.com/PriviMW/PriviMW-Wallet/releases/latest), create a wallet, fund it with a little BEAM, then install Idios from the DApp Store screen inside the app. PriviMW is open source but has not had an external audit yet, so treat it like any young wallet: fine for running Idios and everyday amounts, keep serious funds in the Beam Desktop wallet.
+
 The dapp opens to a landing page with three entry points:
 
 - **Start a contract**: As a requester, fill in deal terms (contract ID, payment, expiry, worker pubkey). Choose Hash verified Settlement (upload deliverable file, dapp computes SHA-256 hash locally) or Reviewed Settlement (set review window and dispute fee). Create the contract. If you arrived via an offer link from a worker, the form auto fills.

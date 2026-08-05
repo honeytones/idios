@@ -113,7 +113,7 @@ The dispute winner receives the payment plus the worker's collateral. The disput
 
 Workers can post a slashable BEAM bond with worker_register. It is tied to your worker pubkey, and a requester can check it with view_worker_bond before hiring you: live stake means losing a dispute costs you the bond (it gets slashed and collected by the treasury). Withdraw with worker_deregister, then worker_reclaim after a cooldown equal to the contract's arbitrator timeout. Reclaim waits while any open dispute encumbers the bond, and a slashed bond is gone for good.
 
-Parties can also coordinate privately over Beam Messenger, built into the Beam wallet under the account menu. Exchange your Beam messaging addresses, add the other party under New chat, and message wallet to wallet over SBBS, nothing on chain. The arbitrator at @tappyoak stays the resolution contact.
+Parties can also coordinate privately over Beam Messenger, built into the Beam wallet under the account menu. Exchange your Beam messaging addresses, add the other party under New chat, and message wallet to wallet over SBBS, nothing on chain. The arbitrator at @tappyoak stays the resolution contact. On Android, [PriviMW](https://github.com/PriviMW/PriviMW-Wallet) is a community built Beam wallet with the same SBBS messaging built in, plus its own DApp Store that runs the Idios dapp.
 
 ## The two modes
 
