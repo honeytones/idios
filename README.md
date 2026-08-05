@@ -176,18 +176,20 @@ Explorer: https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f
 
 ## Quick start (dapp UI)
 
-The simplest way to use Idios is through the Beam Desktop wallet's dapp store.
+The simplest way to use Idios is through a Beam wallet's DApp Store. Two wallets carry it:
 
-1. Install the Beam Desktop wallet for your platform from [beam.mw](https://beam.mw)
-2. Sync to mainnet and fund with a small amount of BEAM.
+- **Desktop** (Windows, Mac, Linux): the official Beam Desktop wallet from [beam.mw](https://beam.mw). The reference path, and where serious funds should live.
+- **Android**: [PriviMW](https://github.com/PriviMW/PriviMW-Wallet), a community built Beam wallet with its own DApp Store and encrypted messaging built in. Install the [latest APK](https://github.com/PriviMW/PriviMW-Wallet/releases/latest). Open source but not yet externally audited, so treat it like any young wallet: fine for running Idios and everyday amounts.
+
+Then, on either:
+
+1. Create a wallet, sync to mainnet, and fund it with a small amount of BEAM.
 
     Two unrelated coins share the name and ticker. Idios runs on **Beam Mimblewimble** (privacy chain, [beam.mw](https://beam.mw), mainnet since 2019), NOT Beam Network (an unrelated Avalanche gaming subnet). Make sure you buy the Mimblewimble one.
 
     Beam Mimblewimble is on MEXC, Gate, and CoinEx. It is not on Binance, Coinbase, or Kraken. For a quick swap from ETH to BEAM without an exchange account, [buybeam.my](https://buybeam.my/) is a community run service. Two limits: the swap has a minimum of $1 of BEAM, smaller amounts send nothing to your wallet, and a maximum of $100 per swap (its liquidity pool is small; for larger buys use an exchange).
-3. Install the Idios dapp from the wallet's DApp Store, or sideload the latest [`.dapp` file from releases](https://github.com/honeytones/idios/releases/latest).
-4. Open Idios from your installed apps.
-
-**On Android:** Idios also runs on [PriviMW](https://github.com/PriviMW/PriviMW-Wallet), a community built Android wallet for Beam with its own DApp Store and encrypted messaging built in. Install the [latest APK](https://github.com/PriviMW/PriviMW-Wallet/releases/latest), create a wallet, fund it with a little BEAM, then install Idios from the DApp Store screen inside the app. PriviMW is open source but has not had an external audit yet, so treat it like any young wallet: fine for running Idios and everyday amounts, keep serious funds in the Beam Desktop wallet.
+2. Install the Idios dapp from the wallet's DApp Store. On desktop you can also sideload the latest [`.dapp` file from releases](https://github.com/honeytones/idios/releases/latest).
+3. Open Idios from your installed apps.
 
 The dapp opens to a landing page with three entry points:
 
