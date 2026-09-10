@@ -2,7 +2,7 @@
 
 **Private escrow and settlement for AI and other compute on Beam.**
 
-Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on chain dispute resolution. No public record of amounts or parties.
+Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on chain dispute resolution. Amounts and parties hidden at the base layer.
 
 **[Website](https://honeytones.github.io/idios-site/)** · **[AI and compute use cases](https://honeytones.github.io/idios-site/private-ai-escrow.html)** · **[Latest Release](https://github.com/honeytones/idios/releases/latest)** · **[Live Explorer](https://explorer.0xmx.net/?network=mainnet&type=contract&id=41ef8be50f0d727a919b5f5e64f7e66d5ec04442bb4f536f664e38b765e4921f)**
 
@@ -14,7 +14,7 @@ Pay for AI and compute work privately. Verifiable delivery, escrowed payment, on
 
 ## Demo
 
-An AI agent takes a job, privately subcontracts two parts to other agents, reviews and pays each, then settles with the client, all on Beam mainnet with amounts and parties hidden the whole way.
+An AI agent takes a job, privately subcontracts two parts to other agents, reviews and pays each, then settles with the client, all on Beam mainnet with amounts and parties hidden at the base layer the whole way.
 
 [![asciicast](https://asciinema.org/a/3LjY52dHpejWZT0F.svg)](https://asciinema.org/a/3LjY52dHpejWZT0F)
 
@@ -24,7 +24,7 @@ An AI agent takes a job, privately subcontracts two parts to other agents, revie
 
 Public payment rails leak. Every contract, every payment, every counterparty becomes part of a permanent searchable record. For AI inference, model training, scientific compute, work that involves proprietary inputs, private data, or competitive operations, that visibility is a dealbreaker.
 
-Idios solves the payment and settlement privacy problem. Payment is locked in private escrow on [Beam](https://beam.mw). The worker locks collateral. Settlement happens on chain with full privacy of amounts and parties. Beam's MimbleWimble protocol hides amounts and identities at the base layer. Idios is what you get when you build escrow on that foundation.
+Idios solves the payment and settlement privacy problem. Payment is locked in private escrow on [Beam](https://beam.mw). The worker locks collateral. Settlement happens on chain with amounts and parties hidden. Beam's MimbleWimble protocol hides amounts and identities at the base layer. Idios is what you get when you build escrow on that foundation.
 
 ERC-8183 standardises the same starting primitive on Ethereum, a Job with escrowed payment for AI agent work. Idios is a separate and more complete protocol on Beam, not a port of it. It adds worker collateral and working dispute resolution, neither of which ERC-8183 has today, and it settles privately with amounts and parties hidden. Idios uses its own roles: Requester, Worker, and Arbitrator.
 
